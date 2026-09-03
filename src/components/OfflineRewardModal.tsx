@@ -7,6 +7,22 @@ interface OfflineRewardModalProps {
   onCollect: () => void;
 }
 
+function formatOfflineDuration(secondsAway: number) {
+  const hours = Math.floor(secondsAway / 3600);
+  const minutes = Math.floor((secondsAway % 3600) / 60);
+  const seconds = secondsAway % 60;
+
+  if (hours > 0) {
+    return `${hours} h ${minutes} min`;
+  }
+
+  if (minutes > 0) {
+    return seconds > 0 ? `${minutes} min ${seconds}s` : `${minutes} min`;
+  }
+
+  return `${seconds}s`;
+}
+
 export function OfflineRewardModal({ reward, onCollect }: OfflineRewardModalProps) {
   return (
     <div className="modalBackdrop" role="presentation">
@@ -16,7 +32,7 @@ export function OfflineRewardModal({ reward, onCollect }: OfflineRewardModalProp
           <Coins size={24} aria-hidden="true" />
           +{formatCoins(reward.coins)}
         </h2>
-        <p>Suas anomalias produziram por {Math.floor(reward.secondsAway / 60)} min.</p>
+        <p>Suas anomalias produziram por {formatOfflineDuration(reward.secondsAway)}.</p>
         <button className="primaryButton" type="button" onClick={onCollect}>
           Coletar
         </button>

@@ -1,20 +1,15 @@
 import { Sparkles } from 'lucide-react';
-import { creatureDefinitions } from '../data/creatures';
-import { formatCoins } from '../utils/economy';
 
 interface BuyCreatureButtonProps {
   disabled: boolean;
-  onBuy: () => void;
+  onOpenShop: () => void;
 }
 
-export function BuyCreatureButton({ disabled, onBuy }: BuyCreatureButtonProps) {
-  const nebulo = creatureDefinitions.nebulo;
-
+export function BuyCreatureButton({ disabled, onOpenShop }: BuyCreatureButtonProps) {
   return (
-    <button className="buyButton" type="button" disabled={disabled} onClick={onBuy}>
+    <button className="buyButton" type="button" disabled={disabled} onClick={onOpenShop}>
       <Sparkles size={18} aria-hidden="true" />
-      <span>Comprar {nebulo.name}</span>
-      <strong>{formatCoins(nebulo.purchaseCost ?? 0)}</strong>
+      <span>Comprar Anomalia</span>
     </button>
   );
 }

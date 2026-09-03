@@ -8,7 +8,10 @@ export interface CreatureDefinition {
   tier: number;
   image: string;
   coinsPerSecond: number;
-  purchaseCost?: number;
+  purchasable: boolean;
+  basePurchasePrice?: number;
+  purchasePriceGrowth?: number;
+  startsUnlockedInShop?: boolean;
   description: string;
   undiscoveredHint?: string;
   idleAnimation?: 'breathe' | 'float' | 'bounce';
@@ -37,6 +40,7 @@ export interface GameState {
   coins: number;
   creatures: CreatureInstance[];
   discoveredCreatureIds: CreatureId[];
+  purchaseCounts: Partial<Record<CreatureId, number>>;
   lastSavedAt: number;
   hasSeenPortalReaction: boolean;
 }
@@ -44,4 +48,10 @@ export interface GameState {
 export interface OfflineReward {
   coins: number;
   secondsAway: number;
+}
+
+export interface VersionedGameSave {
+  saveVersion: 1;
+  state: GameState;
+  updatedAt: string;
 }

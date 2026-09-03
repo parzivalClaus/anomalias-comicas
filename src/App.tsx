@@ -1,24 +1,31 @@
 import { RotateCcw } from 'lucide-react';
 import { useEffect, useReducer, useState } from 'react';
+import { AccountButton } from './components/AccountButton';
+import { AnomalyShop } from './components/AnomalyShop';
 import { BuyCreatureButton } from './components/BuyCreatureButton';
 import { CoinHud } from './components/CoinHud';
 import { Dex } from './components/Dex';
 import { DiscoveryModal } from './components/DiscoveryModal';
 import { GameBoard } from './components/GameBoard';
 import { OfflineRewardModal } from './components/OfflineRewardModal';
+import { useAuth } from './auth/AuthProvider';
 import { creatureDefinitions, dexOrder } from './data/creatures';
+import { gameConfig } from './data/gameConfig';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
 import { reducer, type DragState } from './state/gameStore';
 import type { CreatureInstance } from './types/game';
 import { getProductionPerSecond } from './utils/economy';
 import { evaluateMerge } from './utils/merge';
+import { useCloudSync } from './persistence/useCloudSync';
 
 function App() {
   const initial = useInitialGameModel();
   const [model, dispatch] = useReducer(reducer, initial.model);
   const [dragState, setDragState] = useState<DragState>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
+  const [isShopOpen, setIsShopOpen] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isPortalReacting, setIsPortalReacting] = useState(false);
   const [visibleDiscoveryId, setVisibleDiscoveryId] = useState(model.latestDiscoveryId);
   const [mergeBurst, setMergeBurst] = useState<{
@@ -29,8 +36,13 @@ function App() {
   } | null>(null);
 
   const productionPerSecond = getProductionPerSecond(model.state.creatures);
-  const nebuloCost = creatureDefinitions.nebulo.purchaseCost ?? 0;
-  const canBuyNebulo = model.state.coins >= nebuloCost;
+  const isBoardFull = model.state.creatures.length >= gameConfig.boardSlots;
+  const { user } = useAuth();
+  const { syncStatus } = useCloudSync({
+    user,
+    state: model.state,
+    onApplyState: (state, message) => dispatch({ type: 'replaceState', state, toast: message }),
+  });
 
   useGameLoop(dispatch);
   useAutosave(model.state);
@@ -165,10 +177,17 @@ function App() {
     return () => window.clearTimeout(timeout);
   }, [mergeBurst]);
 
+  useEffect(() => {
+    if (isBoardFull) {
+      setIsShopOpen(false);
+    }
+  }, [isBoardFull]);
+
   return (
     <main className="appShell">
       <div className={`gameStage ${isPortalReacting ? 'gameStage--portalPulse' : ''}`}>
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
+        <AccountButton syncStatus={syncStatus} />
         <div className="portalHint" aria-hidden="true" />
         <GameBoard
           creatures={model.state.creatures}
@@ -180,8 +199,10 @@ function App() {
 
         <div className="actionBar">
           <BuyCreatureButton
-            disabled={!canBuyNebulo}
-            onBuy={() => dispatch({ type: 'buy', creatureId: 'nebulo' })}
+            disabled={isBoardFull}
+            onOpenShop={() => {
+              if (!isBoardFull) setIsShopOpen(true);
+            }}
           />
         </div>
 
@@ -197,7 +218,7 @@ function App() {
           </button>
         </aside>
 
-        <button className="resetButton" type="button" onClick={() => dispatch({ type: 'reset' })}>
+        <button className="resetButton" type="button" onClick={() => setIsResetConfirmOpen(true)}>
           <RotateCcw size={15} aria-hidden="true" />
           Resetar save
         </button>
@@ -243,6 +264,58 @@ function App() {
           discoveredCreatureIds={model.state.discoveredCreatureIds}
           onClose={() => setIsDexOpen(false)}
         />
+      ) : null}
+
+      {isShopOpen ? (
+        <AnomalyShop
+          coins={model.state.coins}
+          discoveredCreatureIds={model.state.discoveredCreatureIds}
+          purchaseCounts={model.state.purchaseCounts}
+          onBuy={(creatureId) => {
+            if (isBoardFull) {
+              setIsShopOpen(false);
+              return;
+            }
+
+            dispatch({ type: 'buy', creatureId });
+          }}
+          onClose={() => setIsShopOpen(false)}
+        />
+      ) : null}
+
+      {isResetConfirmOpen ? (
+        <div className="modalBackdrop" role="presentation">
+          <section className="modal resetConfirm" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+            <p className="modal__eyebrow">Resetar save</p>
+            <h2 id="reset-title">Tudo sera removido</h2>
+            <p>
+              Essa acao zera moedas, criaturas, Dex, compras e descobertas. Se voce estiver
+              conectado, esse reset tambem sera sincronizado na nuvem.
+            </p>
+            <div className="resetConfirm__actions">
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={() => setIsResetConfirmOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="dangerButton"
+                type="button"
+                onClick={() => {
+                  setIsResetConfirmOpen(false);
+                  setIsDexOpen(false);
+                  setIsShopOpen(false);
+                  setVisibleDiscoveryId(null);
+                  dispatch({ type: 'reset' });
+                }}
+              >
+                Resetar tudo
+              </button>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {visibleDiscoveryId ? (

@@ -1,7 +1,8 @@
 import { gameConfig } from '../data/gameConfig';
 import { creatureDefinitions } from '../data/creatures';
 import type { CreatureId, CreatureInstance, GameState, OfflineReward } from '../types/game';
-import { getProductionPerSecond } from '../utils/economy';
+import { clearLocalSave } from '../persistence/localSave';
+import { getProductionPerSecond, getPurchasePrice } from '../utils/economy';
 
 export type DragState = {
   instanceId: string;
@@ -21,6 +22,8 @@ export type GameAction =
       targetSlotIndex: number;
     }
   | { type: 'blockedMerge'; message: string }
+  | { type: 'replaceState'; state: GameState; toast?: string }
+  | { type: 'showToast'; message: string }
   | { type: 'tick'; elapsedSeconds: number }
   | { type: 'dismissDiscovery' }
   | { type: 'reset' }
@@ -51,6 +54,7 @@ export function getInitialState(): GameState {
     coins: gameConfig.startingCoins,
     creatures: [],
     discoveredCreatureIds: [],
+    purchaseCounts: {},
     lastSavedAt: Date.now(),
     hasSeenPortalReaction: false,
   };
@@ -78,14 +82,19 @@ export function findFreeSlot(creatures: CreatureInstance[]) {
 export function reducer(model: GameModel, action: GameAction): GameModel {
   switch (action.type) {
     case 'buy': {
-      const cost = creatureDefinitions[action.creatureId].purchaseCost;
+      const definition = creatureDefinitions[action.creatureId];
+      const cost = getPurchasePrice(action.creatureId, model.state.purchaseCounts);
       const freeSlot = findFreeSlot(model.state.creatures);
 
       if (freeSlot === null) {
         return { ...model, toast: 'Não há espaço livre no tabuleiro.' };
       }
 
-      if (cost === undefined || model.state.coins < cost) {
+      if (!definition.purchasable || definition.basePurchasePrice === undefined) {
+        return { ...model, toast: 'Esta anomalia ainda não pode ser comprada.' };
+      }
+
+      if (model.state.coins < cost) {
         return { ...model, toast: 'Moedas insuficientes.' };
       }
 
@@ -99,6 +108,10 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           ...model.state,
           coins: model.state.coins - cost,
           creatures: [...model.state.creatures, createInstance(action.creatureId, freeSlot)],
+          purchaseCounts: {
+            ...model.state.purchaseCounts,
+            [action.creatureId]: (model.state.purchaseCounts[action.creatureId] ?? 0) + 1,
+          },
           discoveredCreatureIds: alreadyDiscovered
             ? model.state.discoveredCreatureIds
             : [...model.state.discoveredCreatureIds, action.creatureId],
@@ -159,6 +172,20 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         toast: action.message,
       };
 
+    case 'replaceState':
+      return {
+        ...model,
+        state: action.state,
+        latestDiscoveryId: null,
+        toast: action.toast ?? null,
+      };
+
+    case 'showToast':
+      return {
+        ...model,
+        toast: action.message,
+      };
+
     case 'tick':
       return {
         ...model,
@@ -176,7 +203,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       return { ...model, state: { ...model.state, lastSavedAt: Date.now() } };
 
     case 'reset':
-      localStorage.removeItem(gameConfig.saveKey);
+      clearLocalSave();
       return getInitialModel();
 
     default:
