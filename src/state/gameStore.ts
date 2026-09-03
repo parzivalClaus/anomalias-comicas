@@ -423,7 +423,10 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         state: {
           ...model.state,
           coins: model.state.coins + productionPerSecond * elapsedSeconds,
-          creatures: [...model.state.creatures, ...hatchedCreatures],
+          creatures:
+            hatchedCreatures.length > 0
+              ? [...model.state.creatures, ...hatchedCreatures]
+              : model.state.creatures,
           eggs: incubatingEggs,
           discoveredCreatureIds,
           remainingEggSpawnSeconds:

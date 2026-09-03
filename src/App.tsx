@@ -70,6 +70,10 @@ function App() {
           targetSlotIndex: mergeTutorialHint.targetSlotIndex,
         }
       : null;
+  const environmentalHintSignature = model.state.creatures
+    .map((creature) => `${creature.instanceId}:${creature.creatureId}:${creature.slotIndex}`)
+    .sort()
+    .join('|');
   const { user } = useAuth();
   const { syncStatus } = useCloudSync({
     user,
@@ -310,7 +314,7 @@ function App() {
     let clearTimeoutId: number | null = null;
 
     function scheduleHint() {
-      const delay = 6500 + Math.random() * 5500;
+      const delay = 2800 + Math.random() * 3200;
 
       hintTimeout = window.setTimeout(() => {
         if (document.visibilityState !== 'visible') {
@@ -324,14 +328,14 @@ function App() {
           return;
         }
 
-        setEnvironmentalHintInstanceIds(hint.creatureInstanceIds);
+        setEnvironmentalHintInstanceIds(hint.creatureInstanceIds.slice(0, 3));
         setIsEnvironmentReacting(hint.environmentIds.includes('portal'));
 
         clearTimeoutId = window.setTimeout(() => {
           setEnvironmentalHintInstanceIds([]);
           setIsEnvironmentReacting(false);
           scheduleHint();
-        }, 1250);
+        }, 1850);
       }, delay);
     }
 
@@ -341,7 +345,7 @@ function App() {
       if (hintTimeout !== null) window.clearTimeout(hintTimeout);
       if (clearTimeoutId !== null) window.clearTimeout(clearTimeoutId);
     };
-  }, [model.state.creatures]);
+  }, [environmentalHintSignature]);
 
   return (
     <main className="appShell" onPointerDownCapture={recordInteraction}>
