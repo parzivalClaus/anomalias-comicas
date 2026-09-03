@@ -1,0 +1,19 @@
+{
+  "name": "Anomalias Cosmicas",
+  "short_name": "Anomalias",
+  "description": "Jogo incremental de anomalias cosmicas.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#050711",
+  "theme_color": "#10122a",
+  "icons": [
+    {
+      "src": "/ui/dex.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
