@@ -1,3 +1,4 @@
+import { gameConfig } from '../data/gameConfig';
 import type { GameState, VersionedGameSave } from '../types/game';
 
 export const currentSaveVersion = 1;
@@ -15,10 +16,25 @@ function isGameState(value: unknown): value is GameState {
 }
 
 function normalizeState(state: GameState): GameState {
+  const remainingEggSpawnSeconds = Math.min(
+    state.remainingEggSpawnSeconds ?? gameConfig.cosmicEggSpawnSeconds,
+    gameConfig.cosmicEggSpawnSeconds,
+  );
+
   return {
     ...state,
+    eggs: (state.eggs ?? []).map((egg) => ({
+      ...egg,
+      remainingIncubationSeconds: Math.min(
+        egg.remainingIncubationSeconds,
+        gameConfig.cosmicEggIncubationSeconds,
+      ),
+    })),
     purchaseCounts: state.purchaseCounts ?? {},
     hasSeenPortalReaction: state.hasSeenPortalReaction ?? false,
+    remainingEggSpawnSeconds,
+    offlineProductionCapSeconds:
+      state.offlineProductionCapSeconds ?? gameConfig.offlineRewardCapSeconds,
   };
 }
 

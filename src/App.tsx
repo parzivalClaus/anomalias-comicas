@@ -6,6 +6,7 @@ import { BuyCreatureButton } from './components/BuyCreatureButton';
 import { CoinHud } from './components/CoinHud';
 import { Dex } from './components/Dex';
 import { DiscoveryModal } from './components/DiscoveryModal';
+import { EggTimer } from './components/EggTimer';
 import { GameBoard } from './components/GameBoard';
 import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { useAuth } from './auth/AuthProvider';
@@ -36,7 +37,8 @@ function App() {
   } | null>(null);
 
   const productionPerSecond = getProductionPerSecond(model.state.creatures);
-  const isBoardFull = model.state.creatures.length >= gameConfig.boardSlots;
+  const occupiedSlots = model.state.creatures.length + model.state.eggs.length;
+  const isBoardFull = occupiedSlots >= gameConfig.boardSlots;
   const { user } = useAuth();
   const { syncStatus } = useCloudSync({
     user,
@@ -66,14 +68,22 @@ function App() {
       (creature) => creature.instanceId === dragState.instanceId,
     );
     const target = model.state.creatures.find((creature) => creature.slotIndex === slotIndex);
+    const targetEgg = model.state.eggs.find((egg) => egg.slotIndex === slotIndex);
 
     setDragState(null);
     if (!dragged || dragged.slotIndex === slotIndex) return;
 
-    if (!target) {
+    if (!target && !targetEgg) {
       dispatch({ type: 'move', instanceId: dragged.instanceId, toSlotIndex: slotIndex });
       return;
     }
+
+    if (targetEgg) {
+      dispatch({ type: 'blockedMerge', message: 'O ovo ainda esta incubando.' });
+      return;
+    }
+
+    if (!target) return;
 
     const merge = evaluateMerge(dragged, target);
     if (merge.status === 'success') {
@@ -100,7 +110,14 @@ function App() {
 
     if (merge.status === 'blocked') {
       dispatch({ type: 'blockedMerge', message: merge.message });
+      return;
     }
+
+    dispatch({
+      type: 'swap',
+      sourceInstanceId: dragged.instanceId,
+      targetInstanceId: target.instanceId,
+    });
   }
 
   useEffect(() => {
@@ -143,7 +160,7 @@ function App() {
       window.removeEventListener('pointermove', handleWindowPointerMove);
       window.removeEventListener('pointerup', handleWindowPointerUp);
     };
-  }, [dragState, model.state.creatures]);
+  }, [dragState, model.state.creatures, model.state.eggs]);
 
   const draggedCreature = dragState
     ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
@@ -183,15 +200,25 @@ function App() {
     }
   }, [isBoardFull]);
 
+  useEffect(() => {
+    if (!model.toast) return;
+
+    const timeout = window.setTimeout(() => dispatch({ type: 'clearToast' }), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [model.toast]);
+
   return (
     <main className="appShell">
       <div className={`gameStage ${isPortalReacting ? 'gameStage--portalPulse' : ''}`}>
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
         <AccountButton syncStatus={syncStatus} />
+        <EggTimer remainingSeconds={model.state.remainingEggSpawnSeconds} />
         <div className="portalHint" aria-hidden="true" />
         <GameBoard
           creatures={model.state.creatures}
+          eggs={model.state.eggs}
           dragState={dragState}
+          productionPulseId={model.productionPulseId}
           onCreaturePointerDown={handleCreaturePointerDown}
         />
 

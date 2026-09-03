@@ -33,6 +33,9 @@ export function OfflineRewardModal({ reward, onCollect }: OfflineRewardModalProp
           +{formatCoins(reward.coins)}
         </h2>
         <p>Suas anomalias produziram por {formatOfflineDuration(reward.secondsAway)}.</p>
+        {reward.capReached ? (
+          <p className="offline__cap">Limite de producao offline atingido.</p>
+        ) : null}
         <button className="primaryButton" type="button" onClick={onCollect}>
           Coletar
         </button>

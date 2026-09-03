@@ -1,11 +1,14 @@
 import { gameConfig } from "../data/gameConfig";
 import type { DragState } from "../state/gameStore";
-import type { CreatureInstance } from "../types/game";
+import type { CreatureInstance, EggState } from "../types/game";
+import { CosmicEgg } from "./CosmicEgg";
 import { Creature } from "./Creature";
 
 interface GameBoardProps {
   creatures: CreatureInstance[];
+  eggs: EggState[];
   dragState: DragState;
+  productionPulseId: number;
   onCreaturePointerDown: (
     creature: CreatureInstance,
     event: React.PointerEvent<HTMLButtonElement>,
@@ -14,7 +17,9 @@ interface GameBoardProps {
 
 export function GameBoard({
   creatures,
+  eggs,
   dragState,
+  productionPulseId,
   onCreaturePointerDown,
 }: GameBoardProps) {
   const rowTops = [-2, 17.55, 36.2, 56.25, 77.55, 98.1];
@@ -27,6 +32,7 @@ export function GameBoard({
     { length: gameConfig.boardSlots },
     (_, slotIndex) => {
       const creature = creatures.find((item) => item.slotIndex === slotIndex);
+      const egg = eggs.find((item) => item.slotIndex === slotIndex);
       const row = Math.floor(slotIndex / gameConfig.boardColumns);
       const column = slotIndex % gameConfig.boardColumns;
       const sidePadding = rowSidePadding[row] ?? 0;
@@ -36,7 +42,7 @@ export function GameBoard({
 
       return (
         <div
-          className={`boardSlot ${creature ? "boardSlot--occupied" : ""}`}
+          className={`boardSlot ${creature || egg ? "boardSlot--occupied" : ""}`}
           data-slot-index={slotIndex}
           key={slotIndex}
           style={
@@ -53,9 +59,11 @@ export function GameBoard({
             <Creature
               creature={creature}
               isDragging={dragState?.instanceId === creature.instanceId}
+              productionPulseId={productionPulseId}
               onPointerDown={(event) => onCreaturePointerDown(creature, event)}
             />
           ) : null}
+          {egg ? <CosmicEgg egg={egg} /> : null}
         </div>
       );
     },

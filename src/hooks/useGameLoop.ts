@@ -6,6 +6,8 @@ import type { GameAction } from '../state/gameStore';
 export function useGameLoop(dispatch: React.Dispatch<GameAction>) {
   useEffect(() => {
     const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+
       dispatch({ type: 'tick', elapsedSeconds: gameConfig.coinTickMs / 1000 });
     }, gameConfig.coinTickMs);
 

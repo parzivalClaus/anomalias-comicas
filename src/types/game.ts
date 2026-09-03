@@ -12,6 +12,8 @@ export interface CreatureDefinition {
   basePurchasePrice?: number;
   purchasePriceGrowth?: number;
   startsUnlockedInShop?: boolean;
+  stage: number;
+  canHatchFromCosmicEgg: boolean;
   description: string;
   undiscoveredHint?: string;
   idleAnimation?: 'breathe' | 'float' | 'bounce';
@@ -36,18 +38,29 @@ export interface CreatureInstance {
   birthId: number;
 }
 
+export interface EggState {
+  eggId: string;
+  slotIndex: number;
+  remainingIncubationSeconds: number;
+  birthId: number;
+}
+
 export interface GameState {
   coins: number;
   creatures: CreatureInstance[];
+  eggs: EggState[];
   discoveredCreatureIds: CreatureId[];
   purchaseCounts: Partial<Record<CreatureId, number>>;
   lastSavedAt: number;
   hasSeenPortalReaction: boolean;
+  remainingEggSpawnSeconds: number;
+  offlineProductionCapSeconds: number;
 }
 
 export interface OfflineReward {
   coins: number;
   secondsAway: number;
+  capReached: boolean;
 }
 
 export interface VersionedGameSave {

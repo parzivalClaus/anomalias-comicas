@@ -18,6 +18,7 @@ export function loadSavedModel(): { model: GameModel; offlineReward: OfflineRewa
         latestDiscoveryId: null,
         toast: null,
         portalPulseId: 0,
+        productionPulseId: 0,
       },
       offlineReward: rewarded.reward,
     };

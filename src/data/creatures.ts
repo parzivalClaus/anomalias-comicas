@@ -15,6 +15,8 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     purchasable: true,
     basePurchasePrice: 25,
     startsUnlockedInShop: true,
+    stage: 1,
+    canHatchFromCosmicEgg: true,
     description:
       'Uma pequena anomalia gelatinosa que parece reagir ao ambiente ao seu redor. Ninguém sabe de onde vieram os primeiros Nébulos.',
     idleAnimation: 'breathe',
@@ -29,6 +31,8 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     coinsPerSecond: 3,
     purchasable: true,
     basePurchasePrice: 100,
+    stage: 2,
+    canHatchFromCosmicEgg: false,
     description:
       'Quando dois Nébulos entram em ressonância, suas estruturas se fundem em uma anomalia maior. O processo libera uma quantidade incomum de energia.',
     undiscoveredHint: 'Ressonâncias mais intensas parecem ocorrer entre anomalias semelhantes.',
@@ -44,6 +48,8 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     coinsPerSecond: 8,
     purchasable: true,
     basePurchasePrice: 500,
+    stage: 3,
+    canHatchFromCosmicEgg: false,
     description:
       'A energia acumulada em seu núcleo já não parece inteiramente natural. Próximo a certas estruturas, o Nebulux apresenta oscilações que ainda não conseguimos explicar.',
     undiscoveredHint: 'Ressonâncias mais intensas parecem ocorrer entre anomalias semelhantes.',
@@ -59,6 +65,8 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     coinsPerSecond: 20,
     purchasable: true,
     basePurchasePrice: 1500,
+    stage: 4,
+    canHatchFromCosmicEgg: false,
     description:
       'Duas anomalias entraram em ressonância com a estrutura adormecida. Por alguns instantes, algo do outro lado pareceu responder.',
     undiscoveredHint:
