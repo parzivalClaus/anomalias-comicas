@@ -10,6 +10,7 @@ import type {
   OfflineReward,
 } from '../types/game';
 import { getProductionPerSecond, getPurchasePrice } from '../utils/economy';
+import type { SoundCueType } from '../utils/sound';
 
 export type DragState = {
   instanceId: string;
@@ -50,9 +51,16 @@ export interface GameModel {
   toast: string | null;
   portalPulseId: number;
   productionPulseId: number;
+  soundCue: { id: number; type: SoundCueType } | null;
 }
 
 let idCounter = 0;
+let soundCueCounter = 0;
+
+function createSoundCue(type: SoundCueType) {
+  soundCueCounter += 1;
+  return { id: soundCueCounter, type };
+}
 
 export function createInstance(creatureId: CreatureId, slotIndex: number): CreatureInstance {
   idCounter += 1;
@@ -97,6 +105,7 @@ export function getInitialModel(): GameModel {
     toast: null,
     portalPulseId: 0,
     productionPulseId: 0,
+    soundCue: null,
   };
 }
 
@@ -202,6 +211,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         ...model,
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.creatureId,
         toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
+        soundCue: createSoundCue('buy'),
         state: {
           ...model.state,
           coins: model.state.coins - cost,
@@ -279,6 +289,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.resultCreatureId,
         toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
         portalPulseId: shouldPulsePortal ? model.portalPulseId + 1 : model.portalPulseId,
+        soundCue: createSoundCue('portalTransform'),
         state: {
           ...model.state,
           creatures: [
@@ -308,6 +319,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.resultCreatureId,
         toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
         portalPulseId: shouldPulsePortal ? model.portalPulseId + 1 : model.portalPulseId,
+        soundCue: createSoundCue('merge'),
         state: {
           ...model.state,
           creatures: [
@@ -334,6 +346,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       return {
         ...model,
         toast: action.message,
+        soundCue: createSoundCue('invalid'),
       };
 
     case 'replaceState':
@@ -348,6 +361,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       return {
         ...model,
         toast: action.message,
+        soundCue: createSoundCue('invalid'),
       };
 
     case 'clearToast':
@@ -415,6 +429,14 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         latestDiscoveryId: hatchedDiscoveryId ?? model.latestDiscoveryId,
         productionPulseId:
           productionPerSecond > 0 ? model.productionPulseId + 1 : model.productionPulseId,
+        soundCue:
+          hatchedCreatures.length > 0
+            ? createSoundCue('eggHatch')
+            : spawnedEgg
+              ? createSoundCue('eggSpawn')
+              : missedEgg
+                ? createSoundCue('invalid')
+                : model.soundCue,
         toast: hatchedDiscoveryId
           ? 'Nova anomalia descoberta!'
           : missedEgg
