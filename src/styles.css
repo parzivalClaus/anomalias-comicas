@@ -62,7 +62,8 @@ button {
   --board-width: 66.5%;
   --board-height: 48.45%;
   position: relative;
-  width: min(100vw - 12px, 520px, calc((100vh - 16px) * 941 / 1672));
+  width: min(calc(100vw - 12px), 520px, calc((100vh - 16px) * 941 / 1672));
+  width: min(calc(100vw - 12px), 520px, calc((100dvh - 16px) * 941 / 1672));
   aspect-ratio: 941 / 1672;
   overflow: hidden;
   border-radius: 10px;
@@ -1396,14 +1397,14 @@ button {
     height: 100dvh;
     min-height: 100dvh;
     overflow: hidden;
-    padding: 0;
+    padding: max(8px, env(safe-area-inset-top)) 8px
+      max(8px, env(safe-area-inset-bottom));
   }
 
   .gameStage {
-    width: max(100vw, calc(100dvh * 941 / 1672));
-    height: 100vh;
-    height: 100dvh;
-    border-radius: 0;
+    width: min(calc(100vw - 16px), calc((100dvh - 16px) * 941 / 1672));
+    height: auto;
+    border-radius: 10px;
   }
 
   .sideActions {
