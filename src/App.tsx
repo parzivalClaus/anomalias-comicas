@@ -20,6 +20,7 @@ import { getProductionPerSecond } from './utils/economy';
 import { evaluateEnvironmentalTransformation } from './utils/environmentalTransform';
 import { findEnvironmentalHint, findMergeTutorialHint } from './utils/hints';
 import { evaluateMerge } from './utils/merge';
+import { playSoundCue, unlockGameAudio } from './utils/sound';
 import { useCloudSync } from './persistence/useCloudSync';
 
 function App() {
@@ -83,6 +84,12 @@ function App() {
 
   useGameLoop(dispatch);
   useAutosave(model.state);
+
+  useEffect(() => {
+    if (!model.soundCue) return;
+
+    playSoundCue(model.soundCue.type);
+  }, [model.soundCue]);
 
   function recordInteraction() {
     setLastInteractionAt(Date.now());
@@ -348,7 +355,13 @@ function App() {
   }, [environmentalHintSignature]);
 
   return (
-    <main className="appShell" onPointerDownCapture={recordInteraction}>
+    <main
+      className="appShell"
+      onPointerDownCapture={() => {
+        unlockGameAudio();
+        recordInteraction();
+      }}
+    >
       <div
         className={[
           'gameStage',
