@@ -11,13 +11,29 @@ function recipeMatches(inputs: [CreatureId, CreatureId], dragged: CreatureId, ta
   return inputs.includes(dragged) && inputs.includes(target);
 }
 
-function isInPortalInfluence(creature: CreatureInstance) {
-  return creature.slotIndex >= 0 && creature.slotIndex < gameConfig.boardColumns;
+interface MergeEnvironment {
+  targetSlotIndex: number;
 }
 
-function conditionIsMet(condition: EvolutionCondition, creatures: [CreatureInstance, CreatureInstance]) {
+interface MergeContext {
+  dragged: CreatureInstance;
+  target: CreatureInstance;
+  environment: MergeEnvironment;
+}
+
+function isSlotInPortalInfluence(slotIndex: number) {
+  return slotIndex >= 0 && slotIndex < gameConfig.boardColumns;
+}
+
+function getMergeEnvironment(target: CreatureInstance): MergeEnvironment {
+  return {
+    targetSlotIndex: target.slotIndex,
+  };
+}
+
+function conditionIsMet(condition: EvolutionCondition, context: MergeContext) {
   if (condition.type === 'portal_influence') {
-    return creatures.every(isInPortalInfluence);
+    return isSlotInPortalInfluence(context.environment.targetSlotIndex);
   }
 
   return false;
@@ -35,8 +51,13 @@ export function evaluateMerge(
 
   if (!recipe) return { status: 'none' };
 
+  const context: MergeContext = {
+    dragged,
+    target,
+    environment: getMergeEnvironment(target),
+  };
   const conditionsMet =
-    recipe.conditions?.every((condition) => conditionIsMet(condition, [dragged, target])) ?? true;
+    recipe.conditions?.every((condition) => conditionIsMet(condition, context)) ?? true;
 
   if (!conditionsMet) {
     return {
