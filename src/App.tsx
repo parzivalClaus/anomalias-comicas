@@ -317,40 +317,33 @@ function App() {
   ]);
 
   useEffect(() => {
-    let hintTimeout: number | null = null;
-    let clearTimeoutId: number | null = null;
+    const hint = findEnvironmentalHint(model.state.creatures);
+    if (!hint) return;
+    const activeHint = hint;
 
-    function scheduleHint() {
-      const delay = 2800 + Math.random() * 3200;
+    let pulseTimeout: number | null = null;
+    let pauseTimeout: number | null = null;
 
-      hintTimeout = window.setTimeout(() => {
-        if (document.visibilityState !== 'visible') {
-          scheduleHint();
-          return;
-        }
+    function schedulePulse() {
+      if (document.visibilityState !== 'visible') {
+        pulseTimeout = window.setTimeout(schedulePulse, 500);
+        return;
+      }
 
-        const hint = findEnvironmentalHint(model.state.creatures);
-        if (!hint) {
-          scheduleHint();
-          return;
-        }
-
-        setEnvironmentalHintInstanceIds(hint.creatureInstanceIds.slice(0, 3));
-        setIsEnvironmentReacting(hint.environmentIds.includes('portal'));
-
-        clearTimeoutId = window.setTimeout(() => {
-          setEnvironmentalHintInstanceIds([]);
-          setIsEnvironmentReacting(false);
-          scheduleHint();
-        }, 1850);
-      }, delay);
+      setEnvironmentalHintInstanceIds(activeHint.creatureInstanceIds.slice(0, 3));
+      setIsEnvironmentReacting(activeHint.environmentIds.includes('portal'));
+      pauseTimeout = window.setTimeout(() => {
+        setEnvironmentalHintInstanceIds([]);
+        setIsEnvironmentReacting(false);
+        pulseTimeout = window.setTimeout(schedulePulse, 2500);
+      }, 1850);
     }
 
-    scheduleHint();
+    schedulePulse();
 
     return () => {
-      if (hintTimeout !== null) window.clearTimeout(hintTimeout);
-      if (clearTimeoutId !== null) window.clearTimeout(clearTimeoutId);
+      if (pulseTimeout !== null) window.clearTimeout(pulseTimeout);
+      if (pauseTimeout !== null) window.clearTimeout(pauseTimeout);
     };
   }, [environmentalHintSignature]);
 
