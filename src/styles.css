@@ -200,7 +200,7 @@ button {
   position: absolute;
   z-index: 5;
   top: 7.35%;
-  left: 37%;
+  left: 34%;
   min-height: 28px;
   padding: 0 0.52rem;
   display: inline-flex;
@@ -221,6 +221,7 @@ button {
 
 .eggTimer span {
   color: #caffef;
+  white-space: nowrap;
 }
 
 .eggTimer strong {

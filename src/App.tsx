@@ -39,6 +39,15 @@ function App() {
   const productionPerSecond = getProductionPerSecond(model.state.creatures);
   const occupiedSlots = model.state.creatures.length + model.state.eggs.length;
   const isBoardFull = occupiedSlots >= gameConfig.boardSlots;
+  const nextEggToHatch = model.state.eggs.reduce<number | null>(
+    (lowestSeconds, egg) =>
+      lowestSeconds === null
+        ? egg.remainingIncubationSeconds
+        : Math.min(lowestSeconds, egg.remainingIncubationSeconds),
+    null,
+  );
+  const eggTimerPhase = nextEggToHatch === null ? 'manifesting' : 'incubating';
+  const eggTimerSeconds = nextEggToHatch ?? model.state.remainingEggSpawnSeconds;
   const { user } = useAuth();
   const { syncStatus } = useCloudSync({
     user,
@@ -212,7 +221,7 @@ function App() {
       <div className={`gameStage ${isPortalReacting ? 'gameStage--portalPulse' : ''}`}>
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
         <AccountButton syncStatus={syncStatus} />
-        <EggTimer remainingSeconds={model.state.remainingEggSpawnSeconds} />
+        <EggTimer phase={eggTimerPhase} remainingSeconds={eggTimerSeconds} />
         <div className="portalHint" aria-hidden="true" />
         <GameBoard
           creatures={model.state.creatures}

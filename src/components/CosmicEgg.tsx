@@ -22,7 +22,7 @@ export function CosmicEgg({ egg }: CosmicEggProps) {
   return (
     <div
       className={`cosmicEgg ${isHatching ? 'cosmicEgg--hatching' : ''}`}
-      aria-label={`Ovo cosmico, chocando em ${formatEggTime(egg.remainingIncubationSeconds)}`}
+      aria-label="Ovo cosmico incubando"
       style={{ '--egg-wobble-delay': `${wobbleDelay}s` } as React.CSSProperties}
     >
       <span className="cosmicEgg__shadow" />

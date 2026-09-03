@@ -1,4 +1,5 @@
 interface EggTimerProps {
+  phase: 'manifesting' | 'incubating';
   remainingSeconds: number;
 }
 
@@ -10,10 +11,16 @@ function formatTimer(seconds: number) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
-export function EggTimer({ remainingSeconds }: EggTimerProps) {
+export function EggTimer({ phase, remainingSeconds }: EggTimerProps) {
+  const label = phase === 'incubating' ? 'Chocando' : 'Proximo ovo';
+  const ariaLabel =
+    phase === 'incubating'
+      ? `Ovo cosmico chocando em ${formatTimer(remainingSeconds)}`
+      : `Proximo ovo cosmico em ${formatTimer(remainingSeconds)}`;
+
   return (
-    <div className="eggTimer" aria-label={`Proximo ovo cosmico em ${formatTimer(remainingSeconds)}`}>
-      <span aria-hidden="true">Ovo</span>
+    <div className="eggTimer" aria-label={ariaLabel}>
+      <span aria-hidden="true">{label}</span>
       <strong>{formatTimer(remainingSeconds)}</strong>
     </div>
   );
