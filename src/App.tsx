@@ -15,8 +15,10 @@ import { gameConfig } from './data/gameConfig';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
 import { reducer, type DragState } from './state/gameStore';
-import type { CreatureInstance } from './types/game';
+import type { CreatureInstance, EnvironmentId } from './types/game';
 import { getProductionPerSecond } from './utils/economy';
+import { evaluateEnvironmentalTransformation } from './utils/environmentalTransform';
+import { findEnvironmentalHint, findMergeTutorialHint } from './utils/hints';
 import { evaluateMerge } from './utils/merge';
 import { useCloudSync } from './persistence/useCloudSync';
 
@@ -28,6 +30,12 @@ function App() {
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isPortalReacting, setIsPortalReacting] = useState(false);
+  const [lastInteractionAt, setLastInteractionAt] = useState(Date.now());
+  const [mergeTutorialPhase, setMergeTutorialPhase] = useState<'idle' | 'pulse' | 'gesture'>(
+    'idle',
+  );
+  const [environmentalHintInstanceIds, setEnvironmentalHintInstanceIds] = useState<string[]>([]);
+  const [isEnvironmentReacting, setIsEnvironmentReacting] = useState(false);
   const [visibleDiscoveryId, setVisibleDiscoveryId] = useState(model.latestDiscoveryId);
   const [mergeBurst, setMergeBurst] = useState<{
     id: number;
@@ -48,6 +56,20 @@ function App() {
   );
   const eggTimerPhase = nextEggToHatch === null ? 'manifesting' : 'incubating';
   const eggTimerSeconds = nextEggToHatch ?? model.state.remainingEggSpawnSeconds;
+  const mergeTutorialHint = model.state.hasCompletedFirstMergeTutorial
+    ? null
+    : findMergeTutorialHint(model.state.creatures);
+  const mergeHintInstanceIds =
+    mergeTutorialHint && mergeTutorialPhase !== 'idle'
+      ? [mergeTutorialHint.sourceInstanceId, mergeTutorialHint.targetInstanceId]
+      : [];
+  const mergeGestureHint =
+    mergeTutorialHint && mergeTutorialPhase === 'gesture'
+      ? {
+          sourceSlotIndex: mergeTutorialHint.sourceSlotIndex,
+          targetSlotIndex: mergeTutorialHint.targetSlotIndex,
+        }
+      : null;
   const { user } = useAuth();
   const { syncStatus } = useCloudSync({
     user,
@@ -58,10 +80,16 @@ function App() {
   useGameLoop(dispatch);
   useAutosave(model.state);
 
+  function recordInteraction() {
+    setLastInteractionAt(Date.now());
+    setMergeTutorialPhase('idle');
+  }
+
   function handleCreaturePointerDown(
     creature: CreatureInstance,
     event: React.PointerEvent<HTMLButtonElement>,
   ) {
+    recordInteraction();
     setDragState({
       instanceId: creature.instanceId,
       fromSlotIndex: creature.slotIndex,
@@ -72,6 +100,7 @@ function App() {
 
   function handleDropOnSlot(slotIndex: number, burstPoint?: { x: number; y: number }) {
     if (!dragState) return;
+    recordInteraction();
 
     const dragged = model.state.creatures.find(
       (creature) => creature.instanceId === dragState.instanceId,
@@ -129,6 +158,31 @@ function App() {
     });
   }
 
+  function handleDropOnEnvironment(environmentId: EnvironmentId) {
+    if (!dragState) return;
+
+    recordInteraction();
+    const dragged = model.state.creatures.find(
+      (creature) => creature.instanceId === dragState.instanceId,
+    );
+
+    setDragState(null);
+    if (!dragged) return;
+
+    const transformation = evaluateEnvironmentalTransformation(dragged, environmentId);
+    if (transformation.status !== 'success') {
+      dispatch({ type: 'showToast', message: 'Nada respondeu.' });
+      return;
+    }
+
+    dispatch({
+      type: 'environmentalTransform',
+      sourceInstanceId: dragged.instanceId,
+      environmentId,
+      resultCreatureId: transformation.resultCreatureId,
+    });
+  }
+
   useEffect(() => {
     if (!dragState) return;
 
@@ -145,8 +199,17 @@ function App() {
     }
 
     function handleWindowPointerUp(event: PointerEvent) {
-      const slot = document
-        .elementsFromPoint(event.clientX, event.clientY)
+      const elements = document.elementsFromPoint(event.clientX, event.clientY);
+      const environment = elements
+        .map((element) => element.closest<HTMLElement>('[data-environment-id]'))
+        .find(Boolean);
+
+      if (environment?.dataset.environmentId) {
+        handleDropOnEnvironment(environment.dataset.environmentId as EnvironmentId);
+        return;
+      }
+
+      const slot = elements
         .map((element) => element.closest<HTMLElement>('[data-slot-index]'))
         .find(Boolean);
 
@@ -216,18 +279,92 @@ function App() {
     return () => window.clearTimeout(timeout);
   }, [model.toast]);
 
+  useEffect(() => {
+    if (!mergeTutorialHint || model.state.hasCompletedFirstMergeTutorial || dragState) {
+      setMergeTutorialPhase('idle');
+      return;
+    }
+
+    const pulseDelay = Math.max(0, 3200 - (Date.now() - lastInteractionAt));
+    const pulseTimeout = window.setTimeout(() => {
+      setMergeTutorialPhase('pulse');
+    }, pulseDelay);
+    const gestureTimeout = window.setTimeout(() => {
+      setMergeTutorialPhase('gesture');
+    }, pulseDelay + 3000);
+
+    return () => {
+      window.clearTimeout(pulseTimeout);
+      window.clearTimeout(gestureTimeout);
+    };
+  }, [
+    dragState,
+    lastInteractionAt,
+    mergeTutorialHint?.sourceInstanceId,
+    mergeTutorialHint?.targetInstanceId,
+    model.state.hasCompletedFirstMergeTutorial,
+  ]);
+
+  useEffect(() => {
+    let hintTimeout: number | null = null;
+    let clearTimeoutId: number | null = null;
+
+    function scheduleHint() {
+      const delay = 6500 + Math.random() * 5500;
+
+      hintTimeout = window.setTimeout(() => {
+        if (document.visibilityState !== 'visible') {
+          scheduleHint();
+          return;
+        }
+
+        const hint = findEnvironmentalHint(model.state.creatures);
+        if (!hint) {
+          scheduleHint();
+          return;
+        }
+
+        setEnvironmentalHintInstanceIds(hint.creatureInstanceIds);
+        setIsEnvironmentReacting(hint.environmentIds.includes('portal'));
+
+        clearTimeoutId = window.setTimeout(() => {
+          setEnvironmentalHintInstanceIds([]);
+          setIsEnvironmentReacting(false);
+          scheduleHint();
+        }, 1250);
+      }, delay);
+    }
+
+    scheduleHint();
+
+    return () => {
+      if (hintTimeout !== null) window.clearTimeout(hintTimeout);
+      if (clearTimeoutId !== null) window.clearTimeout(clearTimeoutId);
+    };
+  }, [model.state.creatures]);
+
   return (
-    <main className="appShell">
-      <div className={`gameStage ${isPortalReacting ? 'gameStage--portalPulse' : ''}`}>
+    <main className="appShell" onPointerDownCapture={recordInteraction}>
+      <div
+        className={[
+          'gameStage',
+          isPortalReacting ? 'gameStage--portalPulse' : '',
+          isEnvironmentReacting ? 'gameStage--environmentPulse' : '',
+        ].join(' ')}
+      >
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
         <AccountButton syncStatus={syncStatus} />
         <EggTimer phase={eggTimerPhase} remainingSeconds={eggTimerSeconds} />
+        <div className="portalDropZone" data-environment-id="portal" aria-hidden="true" />
         <div className="portalHint" aria-hidden="true" />
         <GameBoard
           creatures={model.state.creatures}
           eggs={model.state.eggs}
           dragState={dragState}
           productionPulseId={model.productionPulseId}
+          mergeHintInstanceIds={mergeHintInstanceIds}
+          environmentalHintInstanceIds={environmentalHintInstanceIds}
+          mergeGestureHint={mergeGestureHint}
           onCreaturePointerDown={handleCreaturePointerDown}
         />
 

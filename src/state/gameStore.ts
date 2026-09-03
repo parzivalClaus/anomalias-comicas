@@ -1,7 +1,14 @@
 import { creatureDefinitions } from '../data/creatures';
 import { gameConfig } from '../data/gameConfig';
 import { clearLocalSave } from '../persistence/localSave';
-import type { CreatureId, CreatureInstance, EggState, GameState, OfflineReward } from '../types/game';
+import type {
+  CreatureId,
+  CreatureInstance,
+  EggState,
+  EnvironmentId,
+  GameState,
+  OfflineReward,
+} from '../types/game';
 import { getProductionPerSecond, getPurchasePrice } from '../utils/economy';
 
 export type DragState = {
@@ -15,6 +22,12 @@ export type GameAction =
   | { type: 'buy'; creatureId: CreatureId }
   | { type: 'move'; instanceId: string; toSlotIndex: number }
   | { type: 'swap'; sourceInstanceId: string; targetInstanceId: string }
+  | {
+      type: 'environmentalTransform';
+      sourceInstanceId: string;
+      environmentId: EnvironmentId;
+      resultCreatureId: CreatureId;
+    }
   | {
       type: 'merge';
       sourceInstanceId: string;
@@ -71,6 +84,7 @@ export function getInitialState(): GameState {
     purchaseCounts: {},
     lastSavedAt: Date.now(),
     hasSeenPortalReaction: false,
+    hasCompletedFirstMergeTutorial: false,
     remainingEggSpawnSeconds: gameConfig.cosmicEggSpawnSeconds,
     offlineProductionCapSeconds: gameConfig.offlineRewardCapSeconds,
   };
@@ -250,6 +264,40 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       };
     }
 
+    case 'environmentalTransform': {
+      const source = model.state.creatures.find(
+        (creature) => creature.instanceId === action.sourceInstanceId,
+      );
+
+      if (!source) return model;
+
+      const alreadyDiscovered = model.state.discoveredCreatureIds.includes(action.resultCreatureId);
+      const shouldPulsePortal = action.environmentId === 'portal';
+
+      return {
+        ...model,
+        latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.resultCreatureId,
+        toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
+        portalPulseId: shouldPulsePortal ? model.portalPulseId + 1 : model.portalPulseId,
+        state: {
+          ...model.state,
+          creatures: [
+            ...model.state.creatures.filter(
+              (creature) => creature.instanceId !== action.sourceInstanceId,
+            ),
+            createInstance(action.resultCreatureId, source.slotIndex),
+          ],
+          discoveredCreatureIds: alreadyDiscovered
+            ? model.state.discoveredCreatureIds
+            : [...model.state.discoveredCreatureIds, action.resultCreatureId],
+          hasSeenPortalReaction: shouldPulsePortal || model.state.hasSeenPortalReaction
+            ? true
+            : model.state.hasSeenPortalReaction,
+          lastSavedAt: Date.now(),
+        },
+      };
+    }
+
     case 'merge': {
       const alreadyDiscovered = model.state.discoveredCreatureIds.includes(action.resultCreatureId);
       const nextCreature = createInstance(action.resultCreatureId, action.targetSlotIndex);
@@ -276,6 +324,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           hasSeenPortalReaction: shouldPulsePortal || model.state.hasSeenPortalReaction
             ? true
             : model.state.hasSeenPortalReaction,
+          hasCompletedFirstMergeTutorial: true,
           lastSavedAt: Date.now(),
         },
       };

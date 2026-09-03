@@ -32,6 +32,7 @@ function normalizeState(state: GameState): GameState {
     })),
     purchaseCounts: state.purchaseCounts ?? {},
     hasSeenPortalReaction: state.hasSeenPortalReaction ?? false,
+    hasCompletedFirstMergeTutorial: state.hasCompletedFirstMergeTutorial ?? false,
     remainingEggSpawnSeconds,
     offlineProductionCapSeconds:
       state.offlineProductionCapSeconds ?? gameConfig.offlineRewardCapSeconds,

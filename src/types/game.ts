@@ -1,5 +1,6 @@
 export type CreatureId = 'nebulo' | 'nebulume' | 'nebulux' | 'umbrelume';
 export type EvolutionConditionType = 'portal_influence';
+export type EnvironmentId = 'portal';
 
 export interface CreatureDefinition {
   id: CreatureId;
@@ -31,6 +32,12 @@ export interface EvolutionRecipe {
   blockedMessage?: string;
 }
 
+export interface EnvironmentalTransformation {
+  input: CreatureId;
+  environmentId: EnvironmentId;
+  result: CreatureId;
+}
+
 export interface CreatureInstance {
   instanceId: string;
   creatureId: CreatureId;
@@ -53,6 +60,7 @@ export interface GameState {
   purchaseCounts: Partial<Record<CreatureId, number>>;
   lastSavedAt: number;
   hasSeenPortalReaction: boolean;
+  hasCompletedFirstMergeTutorial: boolean;
   remainingEggSpawnSeconds: number;
   offlineProductionCapSeconds: number;
 }

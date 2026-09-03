@@ -68,9 +68,9 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 4,
     canHatchFromCosmicEgg: false,
     description:
-      'Duas anomalias entraram em ressonância com a estrutura adormecida. Por alguns instantes, algo do outro lado pareceu responder.',
+      'Uma anomalia que parece ter atravessado algo maior do que uma simples fusão. Por alguns instantes, a estrutura adormecida respondeu.',
     undiscoveredHint:
-      'Registros indicam uma ressonância incomum nas proximidades da estrutura adormecida.',
+      'A estrutura adormecida emite pulsos quando esta anomalia se aproxima.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
   },

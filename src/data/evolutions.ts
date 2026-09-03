@@ -9,10 +9,4 @@ export const evolutionRecipes: EvolutionRecipe[] = [
     inputs: ['nebulume', 'nebulume'],
     result: 'nebulux',
   },
-  {
-    inputs: ['nebulux', 'nebulux'],
-    result: 'umbrelume',
-    conditions: [{ type: 'portal_influence' }],
-    blockedMessage: 'A ressonância parece incompleta...',
-  },
 ];

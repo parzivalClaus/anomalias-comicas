@@ -6,10 +6,19 @@ interface CreatureProps {
   creature: CreatureInstance;
   isDragging: boolean;
   productionPulseId: number;
+  hasMergeHint: boolean;
+  hasEnvironmentalHint: boolean;
   onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
 }
 
-export function Creature({ creature, isDragging, productionPulseId, onPointerDown }: CreatureProps) {
+export function Creature({
+  creature,
+  isDragging,
+  productionPulseId,
+  hasMergeHint,
+  hasEnvironmentalHint,
+  onPointerDown,
+}: CreatureProps) {
   const definition = creatureDefinitions[creature.creatureId];
   const idleDuration = 2.1 + (creature.birthId % 7) * 0.13;
   const idleDelay = -((creature.birthId % 11) * 0.17);
@@ -17,7 +26,13 @@ export function Creature({ creature, isDragging, productionPulseId, onPointerDow
 
   return (
     <button
-      className={`creature creature--${creature.creatureId} ${isDragging ? 'creature--dragging' : ''}`}
+      className={[
+        'creature',
+        `creature--${creature.creatureId}`,
+        isDragging ? 'creature--dragging' : '',
+        hasMergeHint ? 'creature--mergeHint' : '',
+        hasEnvironmentalHint ? 'creature--environmentHint' : '',
+      ].join(' ')}
       type="button"
       aria-label={`${definition.name}, ${definition.coinsPerSecond} moedas por segundo`}
       onPointerDown={onPointerDown}
