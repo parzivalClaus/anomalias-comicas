@@ -32,9 +32,9 @@ export const ECONOMY_BALANCE = {
 } as const;
 
 export const gameConfig = {
-  boardSlots: 20,
+  boardSlots: 24,
   boardColumns: 4,
-  boardRows: 5,
+  boardRows: 6,
   startingCoins: 0,
   offlineRewardCapSeconds: ECONOMY_BALANCE.offline.capSeconds,
   offlineProductionEfficiency: ECONOMY_BALANCE.offline.efficiency,
