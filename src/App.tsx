@@ -561,7 +561,7 @@ function App() {
               </span>
             ) : null}
             <p>
-              <span>{model.state.portalState === 'active' ? 'Portal ativo' : 'Energia'}</span>
+              {model.state.portalState === 'active' ? <span>Portal ativo</span> : null}
               <strong>
                 {model.state.portalState === 'active'
                   ? 'Mapa 2'

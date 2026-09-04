@@ -15,8 +15,10 @@
 }
 
 html,
+body,
 #root {
   width: 100%;
+  height: 100%;
   min-height: 100%;
   min-height: 100dvh;
   background: #050711;
@@ -42,8 +44,10 @@ button {
 }
 
 .appShell {
+  position: relative;
   min-height: 100vh;
   min-height: 100dvh;
+  overflow: hidden;
   display: grid;
   place-items: center;
   padding: max(8px, env(safe-area-inset-top)) 6px
@@ -51,6 +55,19 @@ button {
   background:
     radial-gradient(circle at 50% 0%, rgba(99, 57, 218, 0.28), transparent 34%),
     linear-gradient(180deg, #050711 0%, #07121a 100%);
+}
+
+.appShell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgba(3, 5, 14, 0.28), rgba(3, 8, 16, 0.36)),
+    url("/backgrounds/game-board.png") center / cover no-repeat;
+  filter: blur(14px) saturate(1.08);
+  transform: scale(1.08);
+  pointer-events: none;
 }
 
 .gameStage {
@@ -62,6 +79,7 @@ button {
   --board-width: 66.5%;
   --board-height: 48.45%;
   position: relative;
+  z-index: 1;
   width: min(calc(100vw - 12px), 520px, calc((100vh - 16px) * 941 / 1672));
   width: min(calc(100vw - 12px), 520px, calc((100dvh - 16px) * 941 / 1672));
   aspect-ratio: 941 / 1672;
@@ -221,7 +239,7 @@ button {
 .eggTimer {
   position: absolute;
   z-index: 5;
-  top: 7.35%;
+  top: calc(7.35% - 2px);
   left: 50%;
   min-height: 28px;
   padding: 0 0.52rem;
@@ -299,11 +317,11 @@ button {
 .portalMeter {
   position: absolute;
   z-index: 5;
-  top: 15.8%;
-  left: 36%;
-  width: 29%;
-  min-height: 3.8%;
-  padding: 0.22rem 0.42rem 0.34rem;
+  top: 23.4%;
+  left: 28.5%;
+  width: 45%;
+  min-height: 5.3%;
+  padding: 0.42rem 0.9rem 0.62rem;
   border: 2px solid rgba(74, 112, 158, 0.72);
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(24, 45, 76, 0.92), rgba(7, 18, 32, 0.96));
@@ -314,12 +332,12 @@ button {
 
 .portalMeter .portalMeter__message {
   display: block;
-  margin: 0 0 0.16rem;
+  margin: 0 0 0.18rem;
   color: #fff1a1;
   overflow: visible;
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
-  font-size: clamp(0.43rem, 1.45vw, 0.55rem);
+  font-size: clamp(0.56rem, 1.8vw, 0.7rem);
   line-height: 1.05;
 }
 
@@ -329,11 +347,11 @@ button {
   margin: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 0.25rem;
-  font-size: clamp(0.48rem, 1.75vw, 0.62rem);
+  font-size: clamp(0.58rem, 1.9vw, 0.7rem);
   font-weight: 950;
-  line-height: 1;
+  line-height: 1.05;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.58);
 }
 
@@ -354,7 +372,7 @@ button {
   position: absolute;
   left: 8%;
   right: 8%;
-  bottom: 18%;
+  bottom: 10%;
   height: 4px;
   overflow: hidden;
   border-radius: 999px;
@@ -382,10 +400,10 @@ button {
 .portalHint {
   position: absolute;
   z-index: 2;
-  top: 21.3%;
-  left: 59%;
-  width: 28%;
-  min-height: 6.4%;
+  top: 18.6%;
+  left: 55%;
+  width: 38%;
+  min-height: 4.8%;
   border: 2px solid rgba(51, 84, 124, 0.72);
   border-radius: 18px;
   background:
@@ -402,12 +420,13 @@ button {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 0.48rem;
+  padding: 0.22rem 0.72rem;
   color: #f3f7ff;
-  font-size: clamp(0.58rem, 2.1vw, 0.86rem);
+  font-size: clamp(0.58rem, 2.1vw, 0.82rem);
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1;
   text-align: left;
+  white-space: nowrap;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
 }
 
@@ -1831,14 +1850,24 @@ button {
     height: 100dvh;
     min-height: 100dvh;
     overflow: hidden;
-    padding: max(8px, env(safe-area-inset-top)) 8px
-      max(8px, env(safe-area-inset-bottom));
+    padding: 0;
   }
 
   .gameStage {
-    width: min(calc(100vw - 16px), calc((100dvh - 16px) * 941 / 1672));
-    height: auto;
-    border-radius: 10px;
+    --mobile-safe-gap: 12px;
+    --mobile-crop-x: max(0px, calc((100% - 100vw) / 2));
+    --edge-gap: max(
+      var(--mobile-safe-gap),
+      calc(var(--mobile-crop-x) + var(--mobile-safe-gap)),
+      env(safe-area-inset-left),
+      env(safe-area-inset-right)
+    );
+    --top-gap: max(var(--mobile-safe-gap), env(safe-area-inset-top));
+    --bottom-gap: max(var(--mobile-safe-gap), env(safe-area-inset-bottom));
+    width: max(100vw, calc(100dvh * 941 / 1672));
+    height: 100dvh;
+    max-width: none;
+    border-radius: 0;
   }
 
   .sideActions {
