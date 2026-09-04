@@ -257,11 +257,14 @@ function removeCreaturesAndCollectPending(state: GameState, instanceIds: string[
 export function reducer(model: GameModel, action: GameAction): GameModel {
   switch (action.type) {
     case 'buyEgg': {
-      const cost = getEggPurchasePrice(model.state.highestIncomePerSecond);
+      const cost = getEggPurchasePrice(
+        model.state.highestIncomePerSecond,
+        model.state.purchasedEggCount,
+      );
       const freeSlot = findFreeSlot(model.state.creatures, model.state.eggs);
 
       if (freeSlot === null) {
-        return { ...model, toast: 'Nao ha espaco livre no tabuleiro.' };
+        return { ...model, toast: 'Não há espaço livre no tabuleiro.' };
       }
 
       if (model.state.coins < cost) {
@@ -655,7 +658,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         toast: hatchedDiscoveryId
           ? 'Nova anomalia descoberta!'
           : missedEgg
-            ? 'Uma anomalia tentou se manifestar, mas nao havia espaco disponivel.'
+            ? 'Uma anomalia tentou se manifestar, mas não havia espaço disponível.'
             : model.toast,
         state: updateHighestIncome({
           ...model.state,
@@ -696,7 +699,9 @@ export function applyOfflineReward(state: GameState): {
     state.offlineProductionCapSeconds ?? gameConfig.offlineRewardCapSeconds;
   const cappedSecondsAway = Math.min(secondsAway, offlineProductionCapSeconds);
   const totalProduction = getTotalProductionPerSecond(state);
-  const coins = totalProduction * cappedSecondsAway;
+  const coins = Math.floor(
+    totalProduction * cappedSecondsAway * gameConfig.offlineProductionEfficiency,
+  );
 
   if (coins <= 0 || secondsAway < 10) {
     return {

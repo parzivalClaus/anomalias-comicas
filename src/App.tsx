@@ -63,7 +63,10 @@ function App() {
   const productionPerSecond = getTotalProductionPerSecond(model.state);
   const occupiedSlots = model.state.creatures.length + model.state.eggs.length;
   const isBoardFull = occupiedSlots >= gameConfig.boardSlots;
-  const eggPrice = getEggPurchasePrice(model.state.highestIncomePerSecond);
+  const eggPrice = getEggPurchasePrice(
+    model.state.highestIncomePerSecond,
+    model.state.purchasedEggCount,
+  );
   const canBuyEgg = !isBoardFull && model.state.coins >= eggPrice;
   const eggTimerSeconds = model.state.remainingEggSpawnSeconds;
   const mergeTutorialHint = model.state.hasCompletedFirstMergeTutorial
@@ -297,7 +300,7 @@ function App() {
     recordInteraction();
     if (environmentId === 'portal' && model.state.portalState === 'active') {
       setDragState(null);
-      dispatch({ type: 'showToast', message: 'O portal ja esta ativo.' });
+      dispatch({ type: 'showToast', message: 'O portal já está ativo.' });
       return;
     }
 
@@ -688,7 +691,7 @@ function App() {
             aria-modal="true"
             aria-labelledby="welcome-title"
           >
-            <p className="modal__eyebrow">Anomalias Cosmicas</p>
+            <p className="modal__eyebrow">Anomalias Cósmicas</p>
             <h2 id="welcome-title">Bem-vindo ao desconhecido! ✨</h2>
             <p>
               Crie anomalias, <strong>combine, misture e experimente</strong>. Descubra novas
@@ -709,10 +712,10 @@ function App() {
         <div className="modalBackdrop" role="presentation">
           <section className="modal resetConfirm" role="dialog" aria-modal="true" aria-labelledby="reset-title">
             <p className="modal__eyebrow">Resetar save</p>
-            <h2 id="reset-title">Tudo sera removido</h2>
+            <h2 id="reset-title">Tudo será removido</h2>
             <p>
-              Essa acao zera moedas, criaturas, ovos, Dex, compras, portal e mapas. Se voce
-              estiver conectado, esse reset tambem sera sincronizado na nuvem.
+              Essa ação zera moedas, criaturas, ovos, Dex, compras, portal e mapas. Se você
+              estiver conectado, esse reset também será sincronizado na nuvem.
             </p>
             <div className="resetConfirm__actions">
               <button
@@ -753,8 +756,8 @@ function App() {
             <p className="modal__eyebrow">Remover anomalia</p>
             <h2 id="sell-title">Vender {pendingSaleDefinition.name}?</h2>
             <p>
-              A criatura sai do tabuleiro e voce recebe {pendingSaleValue} moedas. Dex, compras
-              e descobertas nao mudam.
+              A criatura sai do tabuleiro e você recebe {pendingSaleValue} moedas. Dex, compras
+              e descobertas não mudam.
             </p>
             <div className="resetConfirm__actions">
               <button
@@ -794,33 +797,33 @@ function App() {
             <p className="modal__eyebrow">Portal rachado</p>
             <h2 id="sacrifice-title">
               {pendingSacrificeCreatureProductionAfter === 0
-                ? 'Ultima anomalia produtora'
+                ? 'Última anomalia produtora'
                 : pendingSacrificeProductionAfter <= gameConfig.criticalProductionPerSecond
-                  ? 'Producao critica'
+                  ? 'Produção crítica'
                   : 'Sacrificar anomalia?'}
             </h2>
-            <p>{pendingSacrificeDefinition.name} sera consumido permanentemente pelo portal.</p>
+            <p>{pendingSacrificeDefinition.name} será consumido permanentemente pelo portal.</p>
             {pendingSacrificeCreatureProductionAfter === 0 ? (
               <p className="warningText">
-                Sua producao das anomalias caira para 0/s. Voce dependera da energia residual do
-                portal, dos ovos gratuitos e da reconstrucao da colonia.
+                Sua produção das anomalias cairá para 0/s. Você dependerá da energia residual do
+                portal, dos ovos gratuitos e da reconstrução da colônia.
               </p>
             ) : pendingSacrificeProductionAfter <= gameConfig.criticalProductionPerSecond ? (
               <p className="warningText">
-                Este sacrificio reduzira sua producao para apenas{' '}
-                {formatCoins(pendingSacrificeProductionAfter)}/s. Reconstruir sua colonia podera
+                Este sacrifício reduzirá sua produção para apenas{' '}
+                {formatCoins(pendingSacrificeProductionAfter)}/s. Reconstruir sua colônia poderá
                 levar algum tempo.
               </p>
             ) : (
               <p className="warningText">
-                Sua producao caira de {formatCoins(productionPerSecond)}/s para{' '}
+                Sua produção cairá de {formatCoins(productionPerSecond)}/s para{' '}
                 {formatCoins(pendingSacrificeProductionAfter)}/s.
               </p>
             )}
             <p className="sacrificeStats">
               Energia recebida: +{formatCoins(pendingSacrificeEnergy)}
               <br />
-              Perda de producao: {formatCoins(pendingSacrificeProductionLoss)}/s (
+              Perda de produção: {formatCoins(pendingSacrificeProductionLoss)}/s (
               {Math.round(pendingSacrificeLossPercent)}%)
             </p>
             <div className="resetConfirm__actions">

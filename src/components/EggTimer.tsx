@@ -12,7 +12,7 @@ function formatTimer(seconds: number) {
 
 export function EggTimer({ remainingSeconds }: EggTimerProps) {
   return (
-    <div className="eggTimer" aria-label={`Novo ovo cosmico em ${formatTimer(remainingSeconds)}`}>
+    <div className="eggTimer" aria-label={`Novo ovo cósmico em ${formatTimer(remainingSeconds)}`}>
       <span aria-hidden="true">Novo ovo em</span>
       <strong>{formatTimer(remainingSeconds)}</strong>
     </div>

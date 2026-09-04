@@ -35,13 +35,17 @@ export function getPurchasePrice(
   return Math.round(basePrice * Math.pow(growth, purchaseCount));
 }
 
-export function getEggPurchasePrice(highestIncomePerSecond: number) {
-  return Math.round(
-    Math.max(
-      gameConfig.baseEggPrice,
-      highestIncomePerSecond * gameConfig.eggTargetProductionSeconds,
-    ),
+export function getEggPurchasePrice(highestIncomePerSecond: number, purchasedEggCount = 0) {
+  const economicEggPrice = Math.max(
+    gameConfig.baseEggPrice,
+    highestIncomePerSecond * gameConfig.eggTargetProductionSeconds,
   );
+  const purchasePressure = gameConfig.baseEggPrice * Math.pow(
+    gameConfig.eggPurchasePriceGrowth,
+    purchasedEggCount,
+  );
+
+  return Math.round(Math.max(economicEggPrice, purchasePressure));
 }
 
 export function getSellValue(creatureId: CreatureId) {

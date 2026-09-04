@@ -6,6 +6,7 @@ import { formatCoins, getEggPurchasePrice } from '../utils/economy';
 interface AnomalyShopProps {
   coins: number;
   highestIncomePerSecond: number;
+  purchasedEggCount: number;
   onBuyEgg: () => void;
   onClose: () => void;
 }
@@ -13,10 +14,11 @@ interface AnomalyShopProps {
 export function AnomalyShop({
   coins,
   highestIncomePerSecond,
+  purchasedEggCount,
   onBuyEgg,
   onClose,
 }: AnomalyShopProps) {
-  const price = getEggPurchasePrice(highestIncomePerSecond);
+  const price = getEggPurchasePrice(highestIncomePerSecond, purchasedEggCount);
   const canAfford = coins >= price;
 
   return (
@@ -45,8 +47,8 @@ export function AnomalyShop({
               <img src={cosmicEggImage} alt="" />
             </div>
             <div className="shopItem__info">
-              <p>Incubacao {gameConfig.cosmicEggIncubationSeconds}s</p>
-              <h3>Ovo Cosmico</h3>
+              <p>Incubação {gameConfig.cosmicEggIncubationSeconds}s</p>
+              <h3>Ovo Cósmico</h3>
               <span>Gera anomalia-base</span>
             </div>
             <button

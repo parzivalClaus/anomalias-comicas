@@ -27,7 +27,7 @@ export function CosmicEgg({ egg, isDragging = false, onPointerDown }: CosmicEggP
         isDragging ? 'cosmicEgg--dragging' : ''
       }`}
       type="button"
-      aria-label="Ovo cosmico incubando"
+      aria-label="Ovo cósmico incubando"
       onPointerDown={onPointerDown}
       style={{ '--egg-wobble-delay': `${wobbleDelay}s` } as React.CSSProperties}
     >
