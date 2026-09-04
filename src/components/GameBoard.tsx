@@ -32,23 +32,13 @@ export function GameBoard({
   onCollectCreature,
   onEggPointerDown,
 }: GameBoardProps) {
-  const rowTops = [-2, 17.55, 36.2, 56.25, 77.55, 98.1];
-  const colLefts = [0.6, 25.15, 50.1, 75.05];
-  const rowSidePadding = [1, 0, -1, -2, -2, -4];
-  const slotWidth = 23.9;
-  const slotHeight = 15.25;
-
   function getSlotCenter(slotIndex: number) {
     const row = Math.floor(slotIndex / gameConfig.boardColumns);
     const column = slotIndex % gameConfig.boardColumns;
-    const sidePadding = rowSidePadding[row] ?? 0;
-    const rowWidth = 100 - sidePadding * 2;
-    const slotLeft = sidePadding + (colLefts[column] * rowWidth) / 100;
-    const adjustedSlotWidth = (slotWidth * rowWidth) / 100;
 
     return {
-      x: slotLeft + adjustedSlotWidth / 2,
-      y: rowTops[row] + slotHeight / 2,
+      x: ((column + 0.5) / gameConfig.boardColumns) * 100,
+      y: ((row + 0.5) / gameConfig.boardRows) * 100,
     };
   }
 
@@ -57,26 +47,12 @@ export function GameBoard({
     (_, slotIndex) => {
       const creature = creatures.find((item) => item.slotIndex === slotIndex);
       const egg = eggs.find((item) => item.slotIndex === slotIndex);
-      const row = Math.floor(slotIndex / gameConfig.boardColumns);
-      const column = slotIndex % gameConfig.boardColumns;
-      const sidePadding = rowSidePadding[row] ?? 0;
-      const rowWidth = 100 - sidePadding * 2;
-      const slotLeft = sidePadding + (colLefts[column] * rowWidth) / 100;
-      const adjustedSlotWidth = (slotWidth * rowWidth) / 100;
 
       return (
         <div
           className={`boardSlot ${creature || egg ? "boardSlot--occupied" : ""}`}
           data-slot-index={slotIndex}
           key={slotIndex}
-          style={
-            {
-              "--slot-left": `${slotLeft}%`,
-              "--slot-top": `${rowTops[row]}%`,
-              "--slot-width": `${adjustedSlotWidth}%`,
-              "--slot-height": `${slotHeight}%`,
-            } as React.CSSProperties
-          }
         >
           <span className="boardSlot__glow" />
           {creature ? (
@@ -105,7 +81,16 @@ export function GameBoard({
   );
 
   return (
-    <section className="boardWrap" aria-label="Tabuleiro 4 por 6">
+    <section
+      className="boardWrap"
+      aria-label={`Tabuleiro ${gameConfig.boardColumns} por ${gameConfig.boardRows}`}
+      style={
+        {
+          '--board-columns': gameConfig.boardColumns,
+          '--board-rows': gameConfig.boardRows,
+        } as React.CSSProperties
+      }
+    >
       <div className="board">
         {slots}
         {mergeGestureHint ? (

@@ -533,6 +533,20 @@ function App() {
           isEnvironmentReacting ? 'gameStage--environmentPulse' : '',
         ].join(' ')}
       >
+        <div className="sceneLayer" aria-hidden="true" />
+        <GameBoard
+          creatures={model.state.creatures}
+          eggs={model.state.eggs}
+          dragState={dragState}
+          collectionBursts={collectionBursts}
+          mergeHintInstanceIds={mergeHintInstanceIds}
+          environmentalHintInstanceIds={environmentalHintInstanceIds}
+          mergeGestureHint={mergeGestureHint}
+          onCreaturePointerDown={handleCreaturePointerDown}
+          onCollectCreature={collectCreatureCoins}
+          onEggPointerDown={handleEggPointerDown}
+        />
+        <div className="hudLayer">
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
         <AccountButton syncStatus={syncStatus} />
         <EggTimer remainingSeconds={eggTimerSeconds} />
@@ -579,19 +593,6 @@ function App() {
             />
           </div>
         ) : null}
-        <GameBoard
-          creatures={model.state.creatures}
-          eggs={model.state.eggs}
-          dragState={dragState}
-          collectionBursts={collectionBursts}
-          mergeHintInstanceIds={mergeHintInstanceIds}
-          environmentalHintInstanceIds={environmentalHintInstanceIds}
-          mergeGestureHint={mergeGestureHint}
-          onCreaturePointerDown={handleCreaturePointerDown}
-          onCollectCreature={collectCreatureCoins}
-          onEggPointerDown={handleEggPointerDown}
-        />
-
         {model.toast ? <p className="toast" role="status">{model.toast}</p> : null}
 
         <div className="actionBar">
@@ -672,6 +673,7 @@ function App() {
           </div>
         ) : null}
 
+        </div>
       </div>
 
       {isDexOpen ? (

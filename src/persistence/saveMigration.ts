@@ -16,15 +16,68 @@ function isGameState(value: unknown): value is GameState {
   );
 }
 
+function normalizeBoardOccupancy(state: GameState) {
+  const occupiedSlots = new Set<number>();
+  const getNextSlot = () => {
+    for (let index = 0; index < gameConfig.boardSlots; index += 1) {
+      if (!occupiedSlots.has(index)) {
+        occupiedSlots.add(index);
+        return index;
+      }
+    }
+
+    return null;
+  };
+
+  const creatures = (state.creatures ?? [])
+    .map((creature) => {
+      const slotIndex =
+        creature.slotIndex >= 0 &&
+        creature.slotIndex < gameConfig.boardSlots &&
+        !occupiedSlots.has(creature.slotIndex)
+          ? creature.slotIndex
+          : getNextSlot();
+
+      if (slotIndex === null) return null;
+      occupiedSlots.add(slotIndex);
+
+      return {
+        ...creature,
+        slotIndex,
+        pendingCoins: creature.pendingCoins ?? 0,
+      };
+    })
+    .filter((creature): creature is GameState['creatures'][number] => creature !== null);
+
+  const eggs = (state.eggs ?? [])
+    .map((egg) => {
+      const slotIndex =
+        egg.slotIndex >= 0 &&
+        egg.slotIndex < gameConfig.boardSlots &&
+        !occupiedSlots.has(egg.slotIndex)
+          ? egg.slotIndex
+          : getNextSlot();
+
+      if (slotIndex === null) return null;
+      occupiedSlots.add(slotIndex);
+
+      return {
+        ...egg,
+        slotIndex,
+      };
+    })
+    .filter((egg): egg is GameState['eggs'][number] => egg !== null);
+
+  return { creatures, eggs };
+}
+
 function normalizeState(state: GameState): GameState {
   const remainingEggSpawnSeconds = Math.min(
     state.remainingEggSpawnSeconds ?? gameConfig.cosmicEggSpawnSeconds,
     gameConfig.cosmicEggSpawnSeconds,
   );
-  const creatures = (state.creatures ?? []).map((creature) => ({
-    ...creature,
-    pendingCoins: creature.pendingCoins ?? 0,
-  }));
+  const occupancy = normalizeBoardOccupancy(state);
+  const creatures = occupancy.creatures;
   const portalState =
     state.portalState ??
     (state.discoveredCreatureIds.includes('umbrelume') ? 'cracked' : 'dormant');
@@ -33,7 +86,7 @@ function normalizeState(state: GameState): GameState {
   return {
     ...state,
     creatures,
-    eggs: (state.eggs ?? []).map((egg) => ({
+    eggs: occupancy.eggs.map((egg) => ({
       ...egg,
       remainingIncubationSeconds: Math.min(
         egg.remainingIncubationSeconds,

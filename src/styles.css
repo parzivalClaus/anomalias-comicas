@@ -48,13 +48,13 @@ button {
   min-height: 100vh;
   min-height: 100dvh;
   overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   display: grid;
   place-items: center;
-  padding: max(8px, env(safe-area-inset-top)) 6px
-    max(8px, env(safe-area-inset-bottom));
-  background:
-    radial-gradient(circle at 50% 0%, rgba(99, 57, 218, 0.28), transparent 34%),
-    linear-gradient(180deg, #050711 0%, #07121a 100%);
+  padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+  background: #050711;
 }
 
 .appShell::before {
@@ -63,9 +63,9 @@ button {
   inset: 0;
   z-index: 0;
   background:
-    linear-gradient(180deg, rgba(3, 5, 14, 0.28), rgba(3, 8, 16, 0.36)),
+    linear-gradient(180deg, rgba(3, 5, 14, 0.26), rgba(3, 8, 16, 0.36)),
     url("/backgrounds/game-board.png") center / cover no-repeat;
-  filter: blur(14px) saturate(1.08);
+  filter: blur(16px) saturate(1.08);
   transform: scale(1.08);
   pointer-events: none;
 }
@@ -74,66 +74,47 @@ button {
   --edge-gap: max(10px, env(safe-area-inset-left), env(safe-area-inset-right));
   --top-gap: max(10px, env(safe-area-inset-top));
   --bottom-gap: max(10px, env(safe-area-inset-bottom));
-  --board-left: 16.75%;
-  --board-top: 30%;
-  --board-width: 66.5%;
-  --board-height: 48.45%;
   position: relative;
   z-index: 1;
-  width: min(calc(100vw - 12px), 520px, calc((100vh - 16px) * 941 / 1672));
-  width: min(calc(100vw - 12px), 520px, calc((100dvh - 16px) * 941 / 1672));
+  width: min(calc(100vw - 16px), 520px, calc((100dvh - 16px) * 941 / 1672));
   aspect-ratio: 941 / 1672;
+  height: auto;
   overflow: hidden;
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(2, 5, 14, 0.03), rgba(2, 5, 14, 0.12)),
-    url("/backgrounds/game-board.png") center / cover no-repeat;
+  background: #050711;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.52);
 }
 
-.gameStage--portal-cracked {
+.sceneLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgba(2, 5, 14, 0.03), rgba(2, 5, 14, 0.12)),
+    url("/backgrounds/game-board.png") center / cover no-repeat;
+}
+
+.gameStage--portal-cracked .sceneLayer {
   background:
     linear-gradient(180deg, rgba(2, 5, 14, 0.03), rgba(2, 5, 14, 0.12)),
     url("/backgrounds/game-board-portal-cracked.png") center / cover no-repeat;
 }
 
-.gameStage--portal-active {
+.gameStage--portal-active .sceneLayer {
   background:
     linear-gradient(180deg, rgba(2, 5, 14, 0.02), rgba(2, 5, 14, 0.1)),
     url("/backgrounds/game-board-portal-open.png") center / cover no-repeat;
 }
 
-.gameStage--portalPulse::before {
-  content: "";
+.hudLayer {
   position: absolute;
-  z-index: 1;
-  left: 25%;
-  top: 1.5%;
-  width: 50%;
-  height: 27%;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, rgba(132, 255, 239, 0.52), rgba(164, 70, 255, 0.28) 36%, transparent 70%);
-  filter: blur(10px);
-  animation: portalPulse 1.75s ease-out both;
+  inset: 0;
+  z-index: 4;
   pointer-events: none;
 }
 
-.gameStage--portalPulse::after {
-  content: "";
-  position: absolute;
-  z-index: 2;
-  left: 36.8%;
-  top: 8.4%;
-  width: 27%;
-  height: 14%;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, transparent 0 34%, rgba(131, 255, 238, 0.58) 36% 39%, transparent 42%),
-    radial-gradient(circle, rgba(148, 70, 255, 0.28), transparent 64%);
-  filter: drop-shadow(0 0 16px rgba(108, 245, 239, 0.9));
-  animation: portalRing 1.65s ease-out both;
-  pointer-events: none;
+.hudLayer > * {
+  pointer-events: auto;
 }
 
 .coinHud {
@@ -272,16 +253,17 @@ button {
 .portalDropZone {
   position: absolute;
   z-index: 4;
-  left: 33%;
-  top: 6%;
-  width: 34%;
-  height: 18%;
+  left: 50%;
+  top: 7.7%;
+  width: 31%;
+  height: 16%;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
   cursor: default;
   pointer-events: auto;
+  transform: translateX(-50%);
 }
 
 .gameStage--portal-active .portalDropZone {
@@ -291,19 +273,61 @@ button {
 .gameStage--portal-cracked .portalDropZone::after {
   content: "";
   position: absolute;
-  inset: 8%;
+  left: 50%;
+  top: 47%;
+  width: 72%;
+  height: 56%;
   border-radius: 50%;
   background:
     radial-gradient(circle, transparent 0 34%, rgba(131, 255, 238, 0.28) 36% 39%, transparent 43%),
     radial-gradient(circle, rgba(146, 91, 255, 0.16), transparent 66%);
   filter: drop-shadow(0 0 12px rgba(108, 245, 239, 0.5));
   pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.gameStage--portalPulse .portalDropZone::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 47%;
+  width: 138%;
+  height: 106%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(132, 255, 239, 0.52), rgba(164, 70, 255, 0.28) 36%, transparent 70%);
+  filter: blur(10px);
+  animation: portalPulse 1.75s ease-out both;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.gameStage--portalPulse .portalDropZone::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 47%;
+  width: 72%;
+  height: 50%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 34%, rgba(131, 255, 238, 0.58) 36% 39%, transparent 42%),
+    radial-gradient(circle, rgba(148, 70, 255, 0.28), transparent 64%);
+  filter: drop-shadow(0 0 16px rgba(108, 245, 239, 0.9));
+  animation: portalRing 1.65s ease-out both;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .gameStage--environmentPulse .portalDropZone::before {
   content: "";
   position: absolute;
-  inset: -8%;
+  left: 50%;
+  top: 47%;
+  width: 132%;
+  height: 104%;
   border-radius: 50%;
   background:
     radial-gradient(circle, transparent 0 34%, rgba(146, 255, 242, 0.46) 36% 40%, transparent 45%),
@@ -311,6 +335,7 @@ button {
   filter: blur(3px) drop-shadow(0 0 14px rgba(108, 245, 239, 0.76));
   opacity: 0;
   pointer-events: none;
+  transform: translate(-50%, -50%);
   animation: environmentPortalWhisper 1600ms ease-out both;
 }
 
@@ -446,18 +471,61 @@ button {
 
 .boardWrap {
   position: absolute;
-  z-index: 3;
-  left: var(--board-left);
-  top: var(--board-top);
-  width: var(--board-width);
-  height: var(--board-height);
+  z-index: 2;
+  left: 50%;
+  bottom: max(96px, calc(var(--bottom-gap) + 74px));
+  width: min(
+    calc(100% - 104px),
+    54dvh,
+    560px
+  );
+  min-width: min(280px, calc(100% - 24px));
+  aspect-ratio: var(--board-columns) / var(--board-rows);
   padding: 0;
+  transform: translateX(-50%);
 }
 
 .board {
+  --board-frame: clamp(9px, 2.2vw, 18px);
+  --board-gap: clamp(3px, 0.78vw, 7px);
   width: 100%;
   height: 100%;
   position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--board-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--board-rows), minmax(0, 1fr));
+  gap: var(--board-gap);
+  padding: var(--board-frame);
+  border: clamp(5px, 1.15vw, 10px) solid #516b19;
+  border-radius: clamp(18px, 4vw, 32px);
+  background:
+    linear-gradient(180deg, rgba(114, 139, 36, 0.72), rgba(34, 62, 19, 0.9)),
+    #405916;
+  box-shadow:
+    inset 0 3px 0 rgba(209, 229, 93, 0.42),
+    inset 0 -8px 14px rgba(7, 19, 7, 0.45),
+    0 8px 0 rgba(19, 43, 11, 0.62),
+    0 18px 34px rgba(0, 0, 0, 0.36);
+}
+
+.board::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--board-frame) * 0.45);
+  border: 2px solid rgba(25, 48, 15, 0.58);
+  border-radius: clamp(14px, 3.3vw, 26px);
+  pointer-events: none;
+}
+
+.board::after {
+  content: "";
+  position: absolute;
+  inset: var(--board-frame);
+  border-radius: clamp(12px, 2.8vw, 22px);
+  box-shadow:
+    inset 0 0 18px rgba(255, 236, 151, 0.12),
+    inset 0 0 0 2px rgba(46, 63, 22, 0.52);
+  pointer-events: none;
 }
 
 .mergeGestureHint {
@@ -499,16 +567,24 @@ button {
 }
 
 .boardSlot {
-  position: absolute;
-  left: var(--slot-left);
-  top: var(--slot-top);
-  width: var(--slot-width);
-  height: var(--slot-height);
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
   display: grid;
   place-items: center;
   min-width: 0;
+  min-height: 0;
+  overflow: visible;
+  border: 2px solid rgba(75, 80, 38, 0.62);
   border-radius: 12%;
-  background: transparent;
+  background:
+    radial-gradient(circle at 48% 38%, rgba(255, 233, 161, 0.34), transparent 62%),
+    linear-gradient(145deg, #d1ad5b 0%, #ba9348 52%, #97773c 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 238, 166, 0.34),
+    inset 0 -5px 10px rgba(60, 48, 18, 0.28),
+    0 2px 0 rgba(34, 48, 20, 0.72);
   touch-action: none;
 }
 
@@ -530,7 +606,7 @@ button {
 }
 
 .boardSlot--occupied::after {
-  opacity: 0.11;
+  opacity: 0.16;
 }
 
 .boardSlot__glow {
@@ -1706,7 +1782,7 @@ button {
 @keyframes environmentPortalWhisper {
   0% {
     opacity: 0;
-    transform: scale(0.88);
+    transform: translate(-50%, -50%) scale(0.88);
   }
 
   32% {
@@ -1715,7 +1791,7 @@ button {
 
   100% {
     opacity: 0;
-    transform: scale(1.18);
+    transform: translate(-50%, -50%) scale(1.18);
   }
 }
 
@@ -1761,7 +1837,7 @@ button {
 @keyframes portalPulse {
   0% {
     opacity: 0;
-    transform: scale(0.72);
+    transform: translate(-50%, -50%) scale(0.72);
   }
 
   25% {
@@ -1770,19 +1846,19 @@ button {
 
   45% {
     opacity: 0.88;
-    transform: scale(1.04);
+    transform: translate(-50%, -50%) scale(1.04);
   }
 
   100% {
     opacity: 0;
-    transform: scale(1.35);
+    transform: translate(-50%, -50%) scale(1.35);
   }
 }
 
 @keyframes portalRing {
   0% {
     opacity: 0;
-    transform: scale(0.55);
+    transform: translate(-50%, -50%) scale(0.55);
   }
 
   25% {
@@ -1791,7 +1867,7 @@ button {
 
   100% {
     opacity: 0;
-    transform: scale(1.55);
+    transform: translate(-50%, -50%) scale(1.55);
   }
 }
 
@@ -1854,21 +1930,23 @@ button {
   }
 
   .gameStage {
-    --mobile-safe-gap: 12px;
-    --mobile-stage-width: max(100vw, calc(100dvh * 941 / 1672));
-    --mobile-crop-x: max(0px, calc((var(--mobile-stage-width) - 100vw) / 2));
-    --edge-gap: max(
-      var(--mobile-safe-gap),
-      calc(var(--mobile-crop-x) + var(--mobile-safe-gap)),
-      env(safe-area-inset-left),
-      env(safe-area-inset-right)
-    );
-    --top-gap: max(var(--mobile-safe-gap), env(safe-area-inset-top));
-    --bottom-gap: max(var(--mobile-safe-gap), env(safe-area-inset-bottom));
-    width: var(--mobile-stage-width);
+    --edge-gap: max(12px, env(safe-area-inset-left), env(safe-area-inset-right));
+    --top-gap: max(12px, env(safe-area-inset-top));
+    --bottom-gap: max(12px, env(safe-area-inset-bottom));
+    width: 100vw;
     height: 100dvh;
     max-width: none;
     border-radius: 0;
+    box-shadow: none;
+  }
+
+  .boardWrap {
+    bottom: max(92px, calc(var(--bottom-gap) + 72px));
+    width: min(
+      calc(100% - 84px),
+      54dvh,
+      560px
+    );
   }
 
   .coinHud,
