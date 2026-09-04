@@ -1,12 +1,22 @@
 import { creatureDefinitions } from '../data/creatures';
 import { gameConfig } from '../data/gameConfig';
-import type { CreatureId, CreatureInstance } from '../types/game';
+import type { CreatureId, CreatureInstance, GameState, PortalState } from '../types/game';
 
 export function getProductionPerSecond(creatures: CreatureInstance[]) {
   return creatures.reduce(
     (total, creature) => total + creatureDefinitions[creature.creatureId].coinsPerSecond,
     0,
   );
+}
+
+export function getPortalResidualIncomePerSecond(portalState: PortalState) {
+  return portalState === 'cracked' || portalState === 'active'
+    ? gameConfig.portalResidualIncomePerSecond
+    : 0;
+}
+
+export function getTotalProductionPerSecond(state: GameState) {
+  return getProductionPerSecond(state.creatures) + getPortalResidualIncomePerSecond(state.portalState);
 }
 
 export function formatCoins(value: number) {
@@ -23,4 +33,19 @@ export function getPurchasePrice(
   const purchaseCount = purchaseCounts[creatureId] ?? 0;
 
   return Math.round(basePrice * Math.pow(growth, purchaseCount));
+}
+
+export function getEggPurchasePrice(highestIncomePerSecond: number) {
+  return Math.round(
+    Math.max(
+      gameConfig.baseEggPrice,
+      highestIncomePerSecond * gameConfig.eggTargetProductionSeconds,
+    ),
+  );
+}
+
+export function getSellValue(creatureId: CreatureId) {
+  const definition = creatureDefinitions[creatureId];
+
+  return definition.sellValue ?? Math.max(1, Math.floor((definition.basePurchasePrice ?? 10) * 0.15));
 }

@@ -1,7 +1,8 @@
-import { RotateCcw } from 'lucide-react';
-import { useEffect, useReducer, useState } from 'react';
+import { RotateCcw, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import cosmicEggImage from './assets/ui/ovo-cosmico.png';
 import { AccountButton } from './components/AccountButton';
-import { AnomalyShop } from './components/AnomalyShop';
+// import { AnomalyShop } from './components/AnomalyShop';
 import { BuyCreatureButton } from './components/BuyCreatureButton';
 import { CoinHud } from './components/CoinHud';
 import { Dex } from './components/Dex';
@@ -15,8 +16,14 @@ import { gameConfig } from './data/gameConfig';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
 import { reducer, type DragState } from './state/gameStore';
-import type { CreatureInstance, EnvironmentId } from './types/game';
-import { getProductionPerSecond } from './utils/economy';
+import type { CreatureInstance, EggState, EnvironmentId } from './types/game';
+import {
+  formatCoins,
+  getEggPurchasePrice,
+  getProductionPerSecond,
+  getSellValue,
+  getTotalProductionPerSecond,
+} from './utils/economy';
 import { evaluateEnvironmentalTransformation } from './utils/environmentalTransform';
 import { findEnvironmentalHint, findMergeTutorialHint } from './utils/hints';
 import { evaluateMerge } from './utils/merge';
@@ -28,8 +35,11 @@ function App() {
   const [model, dispatch] = useReducer(reducer, initial.model);
   const [dragState, setDragState] = useState<DragState>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
-  const [isShopOpen, setIsShopOpen] = useState(false);
+  const [isSellMode, setIsSellMode] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
+  const [pendingSacrifice, setPendingSacrifice] = useState<CreatureInstance | null>(null);
+  const [isMapPreviewOpen, setIsMapPreviewOpen] = useState(false);
   const [isPortalReacting, setIsPortalReacting] = useState(false);
   const [lastInteractionAt, setLastInteractionAt] = useState(Date.now());
   const [mergeTutorialPhase, setMergeTutorialPhase] = useState<'idle' | 'pulse' | 'gesture'>(
@@ -44,19 +54,18 @@ function App() {
     y: number;
     isDiscovery: boolean;
   } | null>(null);
+  const [collectionBursts, setCollectionBursts] = useState<
+    Record<string, { id: number; amount: number }>
+  >({});
+  const recentlyCollectedCreatureIds = useRef(new Set<string>());
 
-  const productionPerSecond = getProductionPerSecond(model.state.creatures);
+  const creatureProductionPerSecond = getProductionPerSecond(model.state.creatures);
+  const productionPerSecond = getTotalProductionPerSecond(model.state);
   const occupiedSlots = model.state.creatures.length + model.state.eggs.length;
   const isBoardFull = occupiedSlots >= gameConfig.boardSlots;
-  const nextEggToHatch = model.state.eggs.reduce<number | null>(
-    (lowestSeconds, egg) =>
-      lowestSeconds === null
-        ? egg.remainingIncubationSeconds
-        : Math.min(lowestSeconds, egg.remainingIncubationSeconds),
-    null,
-  );
-  const eggTimerPhase = nextEggToHatch === null ? 'manifesting' : 'incubating';
-  const eggTimerSeconds = nextEggToHatch ?? model.state.remainingEggSpawnSeconds;
+  const eggPrice = getEggPurchasePrice(model.state.highestIncomePerSecond);
+  const canBuyEgg = !isBoardFull && model.state.coins >= eggPrice;
+  const eggTimerSeconds = model.state.remainingEggSpawnSeconds;
   const mergeTutorialHint = model.state.hasCompletedFirstMergeTutorial
     ? null
     : findMergeTutorialHint(model.state.creatures);
@@ -75,6 +84,31 @@ function App() {
     .map((creature) => `${creature.instanceId}:${creature.creatureId}:${creature.slotIndex}`)
     .sort()
     .join('|');
+  const portalProgress =
+    model.state.portalEnergyRequired > 0
+      ? Math.min(
+          100,
+          Math.round((model.state.portalEnergy / model.state.portalEnergyRequired) * 100),
+        )
+      : 0;
+  const pendingSaleDefinition = pendingSale ? creatureDefinitions[pendingSale.creatureId] : null;
+  const pendingSaleValue = pendingSale ? getSellValue(pendingSale.creatureId) : 0;
+  const pendingSacrificeDefinition = pendingSacrifice
+    ? creatureDefinitions[pendingSacrifice.creatureId]
+    : null;
+  const pendingSacrificeEnergy = pendingSacrificeDefinition?.portalEnergyValue ?? 0;
+  const pendingSacrificeProductionLoss = pendingSacrificeDefinition?.coinsPerSecond ?? 0;
+  const pendingSacrificeProductionAfter = Math.max(
+    0,
+    productionPerSecond - pendingSacrificeProductionLoss,
+  );
+  const pendingSacrificeCreatureProductionAfter = pendingSacrifice
+    ? Math.max(0, creatureProductionPerSecond - pendingSacrificeProductionLoss)
+    : creatureProductionPerSecond;
+  const pendingSacrificeLossPercent =
+    productionPerSecond > 0
+      ? (pendingSacrificeProductionLoss / productionPerSecond) * 100
+      : 0;
   const { user } = useAuth();
   const { syncStatus } = useCloudSync({
     user,
@@ -96,14 +130,68 @@ function App() {
     setMergeTutorialPhase('idle');
   }
 
+  const collectCreatureCoins = useCallback(
+    (instanceId: string) => {
+      if (recentlyCollectedCreatureIds.current.has(instanceId)) return;
+
+      const creature = model.state.creatures.find((item) => item.instanceId === instanceId);
+      const amount = Math.floor(creature?.pendingCoins ?? 0);
+
+      if (!creature || amount <= 0) return;
+
+      recentlyCollectedCreatureIds.current.add(instanceId);
+      window.setTimeout(() => {
+        recentlyCollectedCreatureIds.current.delete(instanceId);
+      }, 120);
+
+      const burstId = Date.now() + creature.birthId;
+      setCollectionBursts((current) => ({
+        ...current,
+        [instanceId]: { id: burstId, amount },
+      }));
+      window.setTimeout(() => {
+        setCollectionBursts((current) => {
+          if (current[instanceId]?.id !== burstId) return current;
+          const next = { ...current };
+          delete next[instanceId];
+          return next;
+        });
+      }, 780);
+
+      dispatch({ type: 'collectCreatureCoins', instanceId });
+    },
+    [model.state.creatures],
+  );
+
   function handleCreaturePointerDown(
     creature: CreatureInstance,
     event: React.PointerEvent<HTMLButtonElement>,
   ) {
     recordInteraction();
+
+    if (isSellMode) {
+      event.preventDefault();
+      setPendingSale(creature);
+      return;
+    }
+
+    collectCreatureCoins(creature.instanceId);
+
     setDragState({
+      kind: 'creature',
       instanceId: creature.instanceId,
       fromSlotIndex: creature.slotIndex,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+    });
+  }
+
+  function handleEggPointerDown(egg: EggState, event: React.PointerEvent<HTMLButtonElement>) {
+    recordInteraction();
+    setDragState({
+      kind: 'egg',
+      instanceId: egg.eggId,
+      fromSlotIndex: egg.slotIndex,
       pointerX: event.clientX,
       pointerY: event.clientY,
     });
@@ -113,13 +201,43 @@ function App() {
     if (!dragState) return;
     recordInteraction();
 
-    const dragged = model.state.creatures.find(
-      (creature) => creature.instanceId === dragState.instanceId,
-    );
+    const dragged =
+      dragState.kind === 'creature'
+        ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
+        : null;
+    const draggedEgg =
+      dragState.kind === 'egg'
+        ? model.state.eggs.find((egg) => egg.eggId === dragState.instanceId)
+        : null;
     const target = model.state.creatures.find((creature) => creature.slotIndex === slotIndex);
     const targetEgg = model.state.eggs.find((egg) => egg.slotIndex === slotIndex);
 
     setDragState(null);
+
+    if (draggedEgg) {
+      if (draggedEgg.slotIndex === slotIndex) return;
+
+      if (!target && !targetEgg) {
+        dispatch({ type: 'moveEgg', eggId: draggedEgg.eggId, toSlotIndex: slotIndex });
+        return;
+      }
+
+      if (targetEgg) {
+        dispatch({ type: 'swapEggs', sourceEggId: draggedEgg.eggId, targetEggId: targetEgg.eggId });
+        return;
+      }
+
+      if (target) {
+        dispatch({
+          type: 'swapCreatureWithEgg',
+          creatureInstanceId: target.instanceId,
+          eggId: draggedEgg.eggId,
+        });
+      }
+
+      return;
+    }
+
     if (!dragged || dragged.slotIndex === slotIndex) return;
 
     if (!target && !targetEgg) {
@@ -128,7 +246,11 @@ function App() {
     }
 
     if (targetEgg) {
-      dispatch({ type: 'blockedMerge', message: 'O ovo ainda esta incubando.' });
+      dispatch({
+        type: 'swapCreatureWithEgg',
+        creatureInstanceId: dragged.instanceId,
+        eggId: targetEgg.eggId,
+      });
       return;
     }
 
@@ -173,6 +295,18 @@ function App() {
     if (!dragState) return;
 
     recordInteraction();
+    if (environmentId === 'portal' && model.state.portalState === 'active') {
+      setDragState(null);
+      dispatch({ type: 'showToast', message: 'O portal ja esta ativo.' });
+      return;
+    }
+
+    if (dragState.kind !== 'creature') {
+      setDragState(null);
+      dispatch({ type: 'showToast', message: 'Nada respondeu.' });
+      return;
+    }
+
     const dragged = model.state.creatures.find(
       (creature) => creature.instanceId === dragState.instanceId,
     );
@@ -182,7 +316,28 @@ function App() {
 
     const transformation = evaluateEnvironmentalTransformation(dragged, environmentId);
     if (transformation.status !== 'success') {
-      dispatch({ type: 'showToast', message: 'Nada respondeu.' });
+      if (model.state.portalState === 'cracked') {
+        const definition = creatureDefinitions[dragged.creatureId];
+        const totalProductionAfter = Math.max(0, productionPerSecond - definition.coinsPerSecond);
+        const creatureProductionAfter = Math.max(
+          0,
+          creatureProductionPerSecond - definition.coinsPerSecond,
+        );
+        const lossPercent =
+          productionPerSecond > 0 ? (definition.coinsPerSecond / productionPerSecond) * 100 : 0;
+        const shouldWarn =
+          creatureProductionAfter === 0 ||
+          totalProductionAfter <= gameConfig.criticalProductionPerSecond ||
+          lossPercent >= gameConfig.portalSacrificeWarningPercent;
+
+        if (shouldWarn) {
+          setPendingSacrifice(dragged);
+        } else {
+          dispatch({ type: 'sacrifice', instanceId: dragged.instanceId });
+        }
+      } else {
+        dispatch({ type: 'showToast', message: 'Nada respondeu.' });
+      }
       return;
     }
 
@@ -243,10 +398,28 @@ function App() {
       window.removeEventListener('pointermove', handleWindowPointerMove);
       window.removeEventListener('pointerup', handleWindowPointerUp);
     };
-  }, [dragState, model.state.creatures, model.state.eggs]);
+  }, [dragState, model.state.creatures, model.state.eggs, model.state.portalState]);
 
-  const draggedCreature = dragState
+  useEffect(() => {
+    function handlePointerMove(event: PointerEvent) {
+      const creatureElement = document
+        .elementsFromPoint(event.clientX, event.clientY)
+        .map((element) => element.closest<HTMLElement>('[data-creature-instance-id]'))
+        .find(Boolean);
+
+      const instanceId = creatureElement?.dataset.creatureInstanceId;
+      if (instanceId) collectCreatureCoins(instanceId);
+    }
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    return () => window.removeEventListener('pointermove', handlePointerMove);
+  }, [collectCreatureCoins]);
+
+  const draggedCreature = dragState?.kind === 'creature'
     ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
+    : null;
+  const draggedEgg = dragState?.kind === 'egg'
+    ? model.state.eggs.find((egg) => egg.eggId === dragState.instanceId)
     : null;
 
   useEffect(() => {
@@ -276,12 +449,6 @@ function App() {
     const timeout = window.setTimeout(() => setMergeBurst(null), 1100);
     return () => window.clearTimeout(timeout);
   }, [mergeBurst]);
-
-  useEffect(() => {
-    if (isBoardFull) {
-      setIsShopOpen(false);
-    }
-  }, [isBoardFull]);
 
   useEffect(() => {
     if (!model.toast) return;
@@ -358,34 +525,77 @@ function App() {
       <div
         className={[
           'gameStage',
+          `gameStage--portal-${model.state.portalState}`,
           isPortalReacting ? 'gameStage--portalPulse' : '',
           isEnvironmentReacting ? 'gameStage--environmentPulse' : '',
         ].join(' ')}
       >
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
         <AccountButton syncStatus={syncStatus} />
-        <EggTimer phase={eggTimerPhase} remainingSeconds={eggTimerSeconds} />
-        <div className="portalDropZone" data-environment-id="portal" aria-hidden="true" />
+        <EggTimer remainingSeconds={eggTimerSeconds} />
+        <button
+          className="portalDropZone"
+          type="button"
+          data-environment-id="portal"
+          aria-label={model.state.portalState === 'active' ? 'Abrir Mapa 2' : 'Portal'}
+          onClick={() => {
+            if (model.state.portalState === 'active' && !dragState) {
+              setIsMapPreviewOpen(true);
+            }
+          }}
+        />
         <div className="portalHint" aria-hidden="true" />
+        {model.state.portalState !== 'dormant' ? (
+          <div
+            className={`portalMeter ${
+              model.state.portalState === 'active' ? 'portalMeter--active' : ''
+            }`}
+            aria-label="Energia do portal"
+          >
+            {model.state.portalState === 'cracked' ? (
+              <span className="portalMeter__message">
+                O portal despertou... e parece faminto.
+              </span>
+            ) : null}
+            <p>
+              <span>{model.state.portalState === 'active' ? 'Portal ativo' : 'Energia'}</span>
+              <strong>
+                {model.state.portalState === 'active'
+                  ? 'Mapa 2'
+                  : `${model.state.portalEnergy}/${model.state.portalEnergyRequired}`}
+              </strong>
+            </p>
+            <i
+              style={
+                {
+                  '--portal-progress': `${
+                    model.state.portalState === 'active' ? 100 : portalProgress
+                  }%`,
+                } as React.CSSProperties
+              }
+            />
+          </div>
+        ) : null}
         <GameBoard
           creatures={model.state.creatures}
           eggs={model.state.eggs}
           dragState={dragState}
-          productionPulseId={model.productionPulseId}
+          collectionBursts={collectionBursts}
           mergeHintInstanceIds={mergeHintInstanceIds}
           environmentalHintInstanceIds={environmentalHintInstanceIds}
           mergeGestureHint={mergeGestureHint}
           onCreaturePointerDown={handleCreaturePointerDown}
+          onCollectCreature={collectCreatureCoins}
+          onEggPointerDown={handleEggPointerDown}
         />
 
         {model.toast ? <p className="toast" role="status">{model.toast}</p> : null}
 
         <div className="actionBar">
           <BuyCreatureButton
-            disabled={isBoardFull}
-            onOpenShop={() => {
-              if (!isBoardFull) setIsShopOpen(true);
-            }}
+            disabled={!canBuyEgg}
+            price={formatCoins(eggPrice)}
+            onBuy={() => dispatch({ type: 'buyEgg' })}
           />
         </div>
 
@@ -399,6 +609,18 @@ function App() {
               {model.state.discoveredCreatureIds.length} / {dexOrder.length}
             </small>
           </button>
+          <button
+            className={`iconTile iconTile--sell ${isSellMode ? 'is-active' : ''}`}
+            type="button"
+            aria-pressed={isSellMode}
+            onClick={() => setIsSellMode((current) => !current)}
+          >
+            <span className="iconTile__symbol">
+              <Trash2 size={22} aria-hidden="true" />
+            </span>
+            <span>Vender</span>
+            <small>{isSellMode ? 'Ativo' : '15%'}</small>
+          </button>
         </aside>
 
         <button className="resetButton" type="button" onClick={() => setIsResetConfirmOpen(true)}>
@@ -406,7 +628,7 @@ function App() {
           Resetar save
         </button>
 
-        {dragState && draggedCreature ? (
+        {dragState && (draggedCreature || draggedEgg) ? (
           <div
             className="dragPreview"
             style={
@@ -417,7 +639,14 @@ function App() {
             }
             aria-hidden="true"
           >
-            <img src={creatureDefinitions[draggedCreature.creatureId].image} alt="" />
+            <img
+              src={
+                draggedCreature
+                  ? creatureDefinitions[draggedCreature.creatureId].image
+                  : cosmicEggImage
+              }
+              alt=""
+            />
           </div>
         ) : null}
 
@@ -449,21 +678,31 @@ function App() {
         />
       ) : null}
 
-      {isShopOpen ? (
-        <AnomalyShop
-          coins={model.state.coins}
-          discoveredCreatureIds={model.state.discoveredCreatureIds}
-          purchaseCounts={model.state.purchaseCounts}
-          onBuy={(creatureId) => {
-            if (isBoardFull) {
-              setIsShopOpen(false);
-              return;
-            }
+      {/* Futuro: reativar AnomalyShop aqui se a compra voltar a ter submenu/upgrades. */}
 
-            dispatch({ type: 'buy', creatureId });
-          }}
-          onClose={() => setIsShopOpen(false)}
-        />
+      {!model.state.hasSeenWelcomeModal ? (
+        <div className="modalBackdrop" role="presentation">
+          <section
+            className="modal welcomeModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="welcome-title"
+          >
+            <p className="modal__eyebrow">Anomalias Cosmicas</p>
+            <h2 id="welcome-title">Bem-vindo ao desconhecido! ✨</h2>
+            <p>
+              Crie anomalias, <strong>combine, misture e experimente</strong>. Descubra novas
+              formas e desvende os segredos do universo.
+            </p>
+            <button
+              className="primaryButton"
+              type="button"
+              onClick={() => dispatch({ type: 'dismissWelcome' })}
+            >
+              Explorar
+            </button>
+          </section>
+        </div>
       ) : null}
 
       {isResetConfirmOpen ? (
@@ -472,8 +711,8 @@ function App() {
             <p className="modal__eyebrow">Resetar save</p>
             <h2 id="reset-title">Tudo sera removido</h2>
             <p>
-              Essa acao zera moedas, criaturas, Dex, compras e descobertas. Se voce estiver
-              conectado, esse reset tambem sera sincronizado na nuvem.
+              Essa acao zera moedas, criaturas, ovos, Dex, compras, portal e mapas. Se voce
+              estiver conectado, esse reset tambem sera sincronizado na nuvem.
             </p>
             <div className="resetConfirm__actions">
               <button
@@ -489,7 +728,9 @@ function App() {
                 onClick={() => {
                   setIsResetConfirmOpen(false);
                   setIsDexOpen(false);
-                  setIsShopOpen(false);
+                  setIsSellMode(false);
+                  setPendingSale(null);
+                  setPendingSacrifice(null);
                   setVisibleDiscoveryId(null);
                   dispatch({ type: 'reset' });
                 }}
@@ -497,6 +738,128 @@ function App() {
                 Resetar tudo
               </button>
             </div>
+          </section>
+        </div>
+      ) : null}
+
+      {pendingSale && pendingSaleDefinition ? (
+        <div className="modalBackdrop" role="presentation">
+          <section
+            className="modal resetConfirm compactConfirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sell-title"
+          >
+            <p className="modal__eyebrow">Remover anomalia</p>
+            <h2 id="sell-title">Vender {pendingSaleDefinition.name}?</h2>
+            <p>
+              A criatura sai do tabuleiro e voce recebe {pendingSaleValue} moedas. Dex, compras
+              e descobertas nao mudam.
+            </p>
+            <div className="resetConfirm__actions">
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={() => {
+                  setPendingSale(null);
+                  setIsSellMode(false);
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="dangerButton"
+                type="button"
+                onClick={() => {
+                  dispatch({ type: 'sell', instanceId: pendingSale.instanceId });
+                  setPendingSale(null);
+                  setIsSellMode(false);
+                }}
+              >
+                Vender
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {pendingSacrifice && pendingSacrificeDefinition ? (
+        <div className="modalBackdrop" role="presentation">
+          <section
+            className="modal resetConfirm compactConfirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sacrifice-title"
+          >
+            <p className="modal__eyebrow">Portal rachado</p>
+            <h2 id="sacrifice-title">
+              {pendingSacrificeCreatureProductionAfter === 0
+                ? 'Ultima anomalia produtora'
+                : pendingSacrificeProductionAfter <= gameConfig.criticalProductionPerSecond
+                  ? 'Producao critica'
+                  : 'Sacrificar anomalia?'}
+            </h2>
+            <p>{pendingSacrificeDefinition.name} sera consumido permanentemente pelo portal.</p>
+            {pendingSacrificeCreatureProductionAfter === 0 ? (
+              <p className="warningText">
+                Sua producao das anomalias caira para 0/s. Voce dependera da energia residual do
+                portal, dos ovos gratuitos e da reconstrucao da colonia.
+              </p>
+            ) : pendingSacrificeProductionAfter <= gameConfig.criticalProductionPerSecond ? (
+              <p className="warningText">
+                Este sacrificio reduzira sua producao para apenas{' '}
+                {formatCoins(pendingSacrificeProductionAfter)}/s. Reconstruir sua colonia podera
+                levar algum tempo.
+              </p>
+            ) : (
+              <p className="warningText">
+                Sua producao caira de {formatCoins(productionPerSecond)}/s para{' '}
+                {formatCoins(pendingSacrificeProductionAfter)}/s.
+              </p>
+            )}
+            <p className="sacrificeStats">
+              Energia recebida: +{formatCoins(pendingSacrificeEnergy)}
+              <br />
+              Perda de producao: {formatCoins(pendingSacrificeProductionLoss)}/s (
+              {Math.round(pendingSacrificeLossPercent)}%)
+            </p>
+            <div className="resetConfirm__actions">
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={() => setPendingSacrifice(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="dangerButton"
+                type="button"
+                onClick={() => {
+                  dispatch({ type: 'sacrifice', instanceId: pendingSacrifice.instanceId });
+                  setPendingSacrifice(null);
+                }}
+              >
+                {pendingSacrificeCreatureProductionAfter === 0 ? 'Sacrificar mesmo assim' : 'Sacrificar'}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isMapPreviewOpen ? (
+        <div className="modalBackdrop" role="presentation">
+          <section
+            className="modal compactConfirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="map-preview-title"
+          >
+            <p className="modal__eyebrow">Portal ativo</p>
+            <h2 id="map-preview-title">Mapa 2</h2>
+            <p>Em breve...</p>
+            <button className="primaryButton" type="button" onClick={() => setIsMapPreviewOpen(false)}>
+              OK
+            </button>
           </section>
         </div>
       ) : null}

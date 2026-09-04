@@ -8,7 +8,7 @@ interface GameBoardProps {
   creatures: CreatureInstance[];
   eggs: EggState[];
   dragState: DragState;
-  productionPulseId: number;
+  collectionBursts: Record<string, { id: number; amount: number }>;
   mergeHintInstanceIds: string[];
   environmentalHintInstanceIds: string[];
   mergeGestureHint?: { sourceSlotIndex: number; targetSlotIndex: number } | null;
@@ -16,17 +16,21 @@ interface GameBoardProps {
     creature: CreatureInstance,
     event: React.PointerEvent<HTMLButtonElement>,
   ) => void;
+  onCollectCreature: (instanceId: string) => void;
+  onEggPointerDown: (egg: EggState, event: React.PointerEvent<HTMLButtonElement>) => void;
 }
 
 export function GameBoard({
   creatures,
   eggs,
   dragState,
-  productionPulseId,
+  collectionBursts,
   mergeHintInstanceIds,
   environmentalHintInstanceIds,
   mergeGestureHint,
   onCreaturePointerDown,
+  onCollectCreature,
+  onEggPointerDown,
 }: GameBoardProps) {
   const rowTops = [-2, 17.55, 36.2, 56.25, 77.55, 98.1];
   const colLefts = [0.6, 25.15, 50.1, 75.05];
@@ -78,14 +82,23 @@ export function GameBoard({
           {creature ? (
             <Creature
               creature={creature}
-              isDragging={dragState?.instanceId === creature.instanceId}
-              productionPulseId={productionPulseId}
+              isDragging={
+                dragState?.kind === 'creature' && dragState.instanceId === creature.instanceId
+              }
+              collectionBurst={collectionBursts[creature.instanceId] ?? null}
               hasMergeHint={mergeHintInstanceIds.includes(creature.instanceId)}
               hasEnvironmentalHint={environmentalHintInstanceIds.includes(creature.instanceId)}
               onPointerDown={(event) => onCreaturePointerDown(creature, event)}
+              onCollect={() => onCollectCreature(creature.instanceId)}
             />
           ) : null}
-          {egg ? <CosmicEgg egg={egg} /> : null}
+          {egg ? (
+            <CosmicEgg
+              egg={egg}
+              isDragging={dragState?.kind === 'egg' && dragState.instanceId === egg.eggId}
+              onPointerDown={(event) => onEggPointerDown(egg, event)}
+            />
+          ) : null}
         </div>
       );
     },

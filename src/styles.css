@@ -73,6 +73,18 @@ button {
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.52);
 }
 
+.gameStage--portal-cracked {
+  background:
+    linear-gradient(180deg, rgba(2, 5, 14, 0.03), rgba(2, 5, 14, 0.12)),
+    url("/backgrounds/game-board-portal-cracked.png") center / cover no-repeat;
+}
+
+.gameStage--portal-active {
+  background:
+    linear-gradient(180deg, rgba(2, 5, 14, 0.02), rgba(2, 5, 14, 0.1)),
+    url("/backgrounds/game-board-portal-open.png") center / cover no-repeat;
+}
+
 .gameStage--portalPulse::before {
   content: "";
   position: absolute;
@@ -210,7 +222,7 @@ button {
   position: absolute;
   z-index: 5;
   top: 7.35%;
-  left: 34%;
+  left: 50%;
   min-height: 28px;
   padding: 0 0.52rem;
   display: inline-flex;
@@ -224,6 +236,7 @@ button {
   font-size: clamp(0.56rem, 2.05vw, 0.72rem);
   font-weight: 900;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+  transform: translateX(-50%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 5px 12px rgba(0, 0, 0, 0.26);
@@ -245,9 +258,28 @@ button {
   top: 6%;
   width: 34%;
   height: 18%;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: transparent;
+  cursor: default;
   pointer-events: auto;
+}
+
+.gameStage--portal-active .portalDropZone {
+  cursor: pointer;
+}
+
+.gameStage--portal-cracked .portalDropZone::after {
+  content: "";
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 34%, rgba(131, 255, 238, 0.28) 36% 39%, transparent 43%),
+    radial-gradient(circle, rgba(146, 91, 255, 0.16), transparent 66%);
+  filter: drop-shadow(0 0 12px rgba(108, 245, 239, 0.5));
+  pointer-events: none;
 }
 
 .gameStage--environmentPulse .portalDropZone::before {
@@ -262,6 +294,89 @@ button {
   opacity: 0;
   pointer-events: none;
   animation: environmentPortalWhisper 1600ms ease-out both;
+}
+
+.portalMeter {
+  position: absolute;
+  z-index: 5;
+  top: 15.8%;
+  left: 36%;
+  width: 29%;
+  min-height: 3.8%;
+  padding: 0.22rem 0.42rem 0.34rem;
+  border: 2px solid rgba(74, 112, 158, 0.72);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(24, 45, 76, 0.92), rgba(7, 18, 32, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 6px 14px rgba(0, 0, 0, 0.32);
+}
+
+.portalMeter .portalMeter__message {
+  display: block;
+  margin: 0 0 0.16rem;
+  color: #fff1a1;
+  overflow: visible;
+  white-space: normal;
+  text-align: center;
+  font-size: clamp(0.43rem, 1.45vw, 0.55rem);
+  line-height: 1.05;
+}
+
+.portalMeter p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  font-size: clamp(0.48rem, 1.75vw, 0.62rem);
+  font-weight: 950;
+  line-height: 1;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.58);
+}
+
+.portalMeter span {
+  min-width: 0;
+  overflow: hidden;
+  color: #bffdef;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portalMeter strong {
+  color: #fff1a1;
+  white-space: nowrap;
+}
+
+.portalMeter i {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 18%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(2, 9, 22, 0.62);
+}
+
+.portalMeter i::before {
+  content: "";
+  display: block;
+  width: var(--portal-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #61ffe4, #b46cff);
+  box-shadow: 0 0 10px rgba(97, 255, 228, 0.68);
+}
+
+.portalMeter--active {
+  border-color: rgba(141, 255, 241, 0.76);
+}
+
+.gameStage--portal-active .portalHint {
+  display: none;
 }
 
 .portalHint {
@@ -493,23 +608,45 @@ button {
     drop-shadow(0 10px 10px rgba(3, 9, 18, 0.45));
 }
 
-.creature__coinPop {
+.creature__pendingCoins,
+.creature__coinCollect {
   position: absolute;
   z-index: 4;
   left: 50%;
-  top: 10%;
-  padding: 0.08rem 0.24rem;
+  padding: 0.07rem 0.24rem;
   border: 1px solid rgba(255, 242, 160, 0.68);
   border-radius: 999px;
   background: rgba(15, 28, 45, 0.72);
   color: #fff2a0;
-  font-size: clamp(0.52rem, 1.9vw, 0.68rem);
+  font-size: clamp(0.48rem, 1.65vw, 0.62rem);
   font-weight: 950;
   line-height: 1;
   pointer-events: none;
   text-shadow: 0 1px 0 rgba(33, 16, 2, 0.75);
   transform: translate(-50%, 0);
-  animation: coinPop 680ms ease-out var(--coin-pop-delay) both;
+}
+
+.creature__pendingCoins {
+  top: 7%;
+  opacity: 0.82;
+}
+
+.creature__pendingCoins--capped {
+  border-color: rgba(255, 112, 65, 0.95);
+  background: rgba(63, 16, 12, 0.86);
+  color: #ff8a47;
+  box-shadow:
+    0 0 8px rgba(255, 92, 52, 0.38),
+    inset 0 1px 0 rgba(255, 204, 150, 0.22);
+  animation: coinCapReached 620ms ease-out both;
+}
+
+.creature__coinCollect {
+  top: 2%;
+  z-index: 5;
+  background: rgba(18, 32, 48, 0.82);
+  box-shadow: 0 0 9px rgba(255, 231, 119, 0.28);
+  animation: coinCollect 720ms ease-out both;
 }
 
 .creature__shadow {
@@ -570,8 +707,20 @@ button {
   z-index: 2;
   display: grid;
   place-items: center;
-  pointer-events: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   animation: eggArrival 720ms cubic-bezier(0.18, 1.18, 0.28, 1) both;
+}
+
+.cosmicEgg--dragging {
+  animation: none;
+  cursor: grabbing;
+  opacity: 0.72;
+  transform: scale(0.9);
 }
 
 .cosmicEgg__image {
@@ -751,6 +900,16 @@ button {
   font-size: 0.76em;
 }
 
+.iconTile--sell.is-active {
+  border-color: rgba(255, 231, 133, 0.9);
+  background: linear-gradient(180deg, rgba(65, 54, 96, 0.98), rgba(18, 20, 42, 0.98));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -5px 8px rgba(0, 0, 0, 0.28),
+    0 0 18px rgba(255, 220, 91, 0.24),
+    0 8px 18px rgba(0, 0, 0, 0.38);
+}
+
 .iconTile__art {
   width: clamp(42px, 10vw, 56px);
   height: clamp(42px, 10vw, 56px);
@@ -767,6 +926,19 @@ button {
   height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.28));
+}
+
+.iconTile__symbol {
+  width: clamp(36px, 8.8vw, 46px);
+  height: clamp(36px, 8.8vw, 46px);
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffbe53, #b96c18);
+  color: #fff6c8;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.34),
+    0 4px 0 rgba(72, 35, 7, 0.42);
 }
 
 .resetButton {
@@ -1027,6 +1199,12 @@ button {
   filter: drop-shadow(0 5px 7px rgba(0, 0, 0, 0.38));
 }
 
+.shopItem__portrait--egg img {
+  width: 88%;
+  height: 88%;
+  mix-blend-mode: screen;
+}
+
 .shopItem__info {
   min-width: 0;
 }
@@ -1214,6 +1392,24 @@ button {
   font-weight: 900;
 }
 
+.welcomeModal {
+  text-align: center;
+}
+
+.welcomeModal h2 {
+  color: #fff1a1;
+  text-shadow: 0 2px 0 rgba(42, 24, 6, 0.68);
+}
+
+.welcomeModal p:not(.modal__eyebrow) {
+  color: rgba(247, 251, 255, 0.82);
+  line-height: 1.48;
+}
+
+.welcomeModal strong {
+  color: #caffef;
+}
+
 .primaryButton {
   width: 100%;
   padding: 0 16px;
@@ -1225,6 +1421,24 @@ button {
 .resetConfirm p:not(.modal__eyebrow) {
   color: rgba(247, 251, 255, 0.78);
   line-height: 1.45;
+}
+
+.warningText {
+  color: #fff1a1 !important;
+  font-weight: 900;
+}
+
+.sacrificeStats {
+  padding: 0.58rem 0.72rem;
+  border: 1px solid rgba(255, 231, 133, 0.32);
+  border-radius: 12px;
+  background: rgba(6, 14, 28, 0.36);
+  color: rgba(247, 251, 255, 0.84) !important;
+  font-weight: 850;
+}
+
+.compactConfirm {
+  width: min(100%, 390px);
 }
 
 .resetConfirm__actions {
@@ -1315,19 +1529,33 @@ button {
   }
 }
 
-@keyframes coinPop {
+@keyframes coinCollect {
   0% {
     opacity: 0;
     transform: translate(-50%, 2px) scale(0.82);
   }
 
   18% {
-    opacity: 0.9;
+    opacity: 0.92;
   }
 
   100% {
     opacity: 0;
-    transform: translate(-50%, -12px) scale(0.96);
+    transform: translate(-50%, -14px) scale(0.96);
+  }
+}
+
+@keyframes coinCapReached {
+  0% {
+    transform: translate(-50%, 0) scale(0.92);
+  }
+
+  42% {
+    transform: translate(-50%, -1px) scale(1.12);
+  }
+
+  100% {
+    transform: translate(-50%, 0) scale(1);
   }
 }
 

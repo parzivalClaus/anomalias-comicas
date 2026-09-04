@@ -9,4 +9,16 @@ export const evolutionRecipes: EvolutionRecipe[] = [
     inputs: ['nebulume', 'nebulume'],
     result: 'nebulux',
   },
+  {
+    inputs: ['nebulux', 'nebulux'],
+    result: 'neburix',
+  },
+  {
+    inputs: ['neburix', 'neburix'],
+    result: 'gravulon',
+  },
+  {
+    inputs: ['gravulon', 'gravulon'],
+    result: 'singulume',
+  },
 ];

@@ -3,16 +3,24 @@ import { gameConfig } from '../data/gameConfig';
 import { clearLocalSave } from '../persistence/localSave';
 import type {
   CreatureId,
+  CreatureDefinition,
   CreatureInstance,
+  EggSource,
   EggState,
   EnvironmentId,
   GameState,
   OfflineReward,
 } from '../types/game';
-import { getProductionPerSecond, getPurchasePrice } from '../utils/economy';
+import {
+  getEggPurchasePrice,
+  getPortalResidualIncomePerSecond,
+  getSellValue,
+  getTotalProductionPerSecond,
+} from '../utils/economy';
 import type { SoundCueType } from '../utils/sound';
 
 export type DragState = {
+  kind: 'creature' | 'egg';
   instanceId: string;
   fromSlotIndex: number;
   pointerX: number;
@@ -20,9 +28,14 @@ export type DragState = {
 } | null;
 
 export type GameAction =
-  | { type: 'buy'; creatureId: CreatureId }
+  | { type: 'buyEgg' }
+  | { type: 'sell'; instanceId: string }
+  | { type: 'sacrifice'; instanceId: string }
   | { type: 'move'; instanceId: string; toSlotIndex: number }
+  | { type: 'moveEgg'; eggId: string; toSlotIndex: number }
   | { type: 'swap'; sourceInstanceId: string; targetInstanceId: string }
+  | { type: 'swapEggs'; sourceEggId: string; targetEggId: string }
+  | { type: 'swapCreatureWithEgg'; creatureInstanceId: string; eggId: string }
   | {
       type: 'environmentalTransform';
       sourceInstanceId: string;
@@ -40,7 +53,9 @@ export type GameAction =
   | { type: 'replaceState'; state: GameState; toast?: string }
   | { type: 'showToast'; message: string }
   | { type: 'clearToast' }
+  | { type: 'collectCreatureCoins'; instanceId: string }
   | { type: 'tick'; elapsedSeconds: number }
+  | { type: 'dismissWelcome' }
   | { type: 'dismissDiscovery' }
   | { type: 'reset' }
   | { type: 'touchTimestamp' };
@@ -70,16 +85,18 @@ export function createInstance(creatureId: CreatureId, slotIndex: number): Creat
     creatureId,
     slotIndex,
     birthId: Date.now() + idCounter,
+    pendingCoins: 0,
   };
 }
 
-function createEgg(slotIndex: number): EggState {
+function createEgg(slotIndex: number, source: EggSource = 'free'): EggState {
   idCounter += 1;
   return {
     eggId: globalThis.crypto?.randomUUID?.() ?? `egg-${Date.now()}-${idCounter}`,
     slotIndex,
     remainingIncubationSeconds: gameConfig.cosmicEggIncubationSeconds,
     birthId: Date.now() + idCounter,
+    source,
   };
 }
 
@@ -90,9 +107,17 @@ export function getInitialState(): GameState {
     eggs: [createEgg(Math.floor(Math.random() * gameConfig.boardSlots))],
     discoveredCreatureIds: [],
     purchaseCounts: {},
+    purchasedEggCount: 0,
+    highestIncomePerSecond: 0,
     lastSavedAt: Date.now(),
+    hasSeenWelcomeModal: false,
     hasSeenPortalReaction: false,
     hasCompletedFirstMergeTutorial: false,
+    portalState: 'dormant',
+    portalEnergy: 0,
+    portalEnergyRequired: gameConfig.portalEnergyRequired,
+    unlockedMapIds: ['map1'],
+    currentMapId: 'map1',
     remainingEggSpawnSeconds: gameConfig.cosmicEggSpawnSeconds,
     offlineProductionCapSeconds: gameConfig.offlineRewardCapSeconds,
   };
@@ -136,93 +161,122 @@ function findRandomFreeSlot(creatures: CreatureInstance[], eggs: EggState[]) {
   return freeSlots[Math.floor(Math.random() * freeSlots.length)];
 }
 
-function getHatchEligibleCreatureIds(state: GameState): CreatureId[] {
-  const eligible = Object.values(creatureDefinitions)
-    .filter(
-      (definition) =>
-        definition.stage === 1 &&
-        definition.canHatchFromCosmicEgg &&
-        state.discoveredCreatureIds.includes(definition.id),
-    )
-    .map((definition) => definition.id);
+function familyIsKnown(definition: CreatureDefinition, state: GameState) {
+  if (definition.startsUnlockedInShop) return true;
 
-  if (eligible.length > 0) return eligible;
+  return Object.values(creatureDefinitions).some(
+    (candidate) =>
+      candidate.familyId === definition.familyId &&
+      (state.discoveredCreatureIds.includes(candidate.id) ||
+        state.creatures.some((creature) => creature.creatureId === candidate.id)),
+  );
+}
+
+function getHatchEligibleCreatureIds(state: GameState): CreatureId[] {
+  const hatchConfig = gameConfig.eggHatchConfig;
 
   return Object.values(creatureDefinitions)
-    .filter(
-      (definition) =>
-        definition.stage === 1 &&
-        definition.canHatchFromCosmicEgg &&
-        state.creatures.some((creature) => creature.creatureId === definition.id),
-    )
+    .filter((definition) => {
+      if (!definition.canHatchFromCosmicEgg) return false;
+      if (!hatchConfig.allowedStages.includes(definition.stage)) return false;
+      if (
+        hatchConfig.allowedFamilies &&
+        !hatchConfig.allowedFamilies.includes(definition.familyId)
+      ) {
+        return false;
+      }
+
+      return familyIsKnown(definition, state);
+    })
     .map((definition) => definition.id);
 }
 
 function chooseHatchedCreatureId(state: GameState): CreatureId | null {
   const eligible = getHatchEligibleCreatureIds(state);
 
-  if (eligible.length === 0) {
-    const starter = Object.values(creatureDefinitions).find(
-      (definition) =>
-        definition.stage === 1 &&
-        definition.canHatchFromCosmicEgg &&
-        definition.startsUnlockedInShop,
-    );
+  if (eligible.length === 0) return null;
 
-    return starter?.id ?? null;
+  const weights = gameConfig.eggHatchConfig.weights ?? {};
+  const weightedEntries = eligible.map((creatureId) => ({
+    creatureId,
+    weight: Math.max(0, weights[creatureId] ?? 1),
+  }));
+  const totalWeight = weightedEntries.reduce((total, entry) => total + entry.weight, 0);
+
+  if (totalWeight <= 0) return eligible[0] ?? null;
+
+  let roll = Math.random() * totalWeight;
+  for (const entry of weightedEntries) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.creatureId;
   }
 
-  return eligible[Math.floor(Math.random() * eligible.length)];
+  return weightedEntries[weightedEntries.length - 1]?.creatureId ?? null;
 }
 
 function hasHatchCandidate(state: GameState) {
-  return Object.values(creatureDefinitions).some(
-    (definition) =>
-      definition.stage === 1 &&
-      definition.canHatchFromCosmicEgg &&
-      (state.discoveredCreatureIds.includes(definition.id) ||
-        state.creatures.some((creature) => creature.creatureId === definition.id) ||
-        definition.startsUnlockedInShop),
-  );
+  return getHatchEligibleCreatureIds(state).length > 0;
+}
+
+function updateHighestIncome(state: GameState): GameState {
+  return {
+    ...state,
+    highestIncomePerSecond: Math.max(
+      state.highestIncomePerSecond,
+      getTotalProductionPerSecond(state),
+    ),
+  };
+}
+
+function getPendingCoins(creature: CreatureInstance) {
+  return Math.floor(creature.pendingCoins ?? 0);
+}
+
+function getPendingCoinCap(creature: CreatureInstance) {
+  return creatureDefinitions[creature.creatureId].coinsPerSecond * gameConfig.coinStorageSeconds;
+}
+
+function getPendingCoinsForInstanceIds(state: GameState, instanceIds: string[]) {
+  const instanceIdSet = new Set(instanceIds);
+
+  return state.creatures
+    .filter((creature) => instanceIdSet.has(creature.instanceId))
+    .reduce((total, creature) => total + getPendingCoins(creature), 0);
+}
+
+function removeCreaturesAndCollectPending(state: GameState, instanceIds: string[]) {
+  const instanceIdSet = new Set(instanceIds);
+
+  return {
+    ...state,
+    coins: state.coins + getPendingCoinsForInstanceIds(state, instanceIds),
+    creatures: state.creatures.filter((creature) => !instanceIdSet.has(creature.instanceId)),
+  };
 }
 
 export function reducer(model: GameModel, action: GameAction): GameModel {
   switch (action.type) {
-    case 'buy': {
-      const definition = creatureDefinitions[action.creatureId];
-      const cost = getPurchasePrice(action.creatureId, model.state.purchaseCounts);
+    case 'buyEgg': {
+      const cost = getEggPurchasePrice(model.state.highestIncomePerSecond);
       const freeSlot = findFreeSlot(model.state.creatures, model.state.eggs);
 
       if (freeSlot === null) {
         return { ...model, toast: 'Nao ha espaco livre no tabuleiro.' };
       }
 
-      if (!definition.purchasable || definition.basePurchasePrice === undefined) {
-        return { ...model, toast: 'Esta anomalia ainda nao pode ser comprada.' };
-      }
-
       if (model.state.coins < cost) {
         return { ...model, toast: 'Moedas insuficientes.' };
       }
 
-      const alreadyDiscovered = model.state.discoveredCreatureIds.includes(action.creatureId);
-
       return {
         ...model,
-        latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.creatureId,
-        toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
+        toast: null,
         soundCue: createSoundCue('buy'),
         state: {
           ...model.state,
           coins: model.state.coins - cost,
-          creatures: [...model.state.creatures, createInstance(action.creatureId, freeSlot)],
-          purchaseCounts: {
-            ...model.state.purchaseCounts,
-            [action.creatureId]: (model.state.purchaseCounts[action.creatureId] ?? 0) + 1,
-          },
-          discoveredCreatureIds: alreadyDiscovered
-            ? model.state.discoveredCreatureIds
-            : [...model.state.discoveredCreatureIds, action.creatureId],
+          eggs: [...model.state.eggs, createEgg(freeSlot, 'purchased')],
+          purchasedEggCount: model.state.purchasedEggCount + 1,
           lastSavedAt: Date.now(),
         },
       };
@@ -242,6 +296,69 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           lastSavedAt: Date.now(),
         },
       };
+
+    case 'moveEgg':
+      return {
+        ...model,
+        toast: null,
+        state: {
+          ...model.state,
+          eggs: model.state.eggs.map((egg) =>
+            egg.eggId === action.eggId ? { ...egg, slotIndex: action.toSlotIndex } : egg,
+          ),
+          lastSavedAt: Date.now(),
+        },
+      };
+
+    case 'sell': {
+      const creature = model.state.creatures.find((item) => item.instanceId === action.instanceId);
+      if (!creature) return model;
+
+      const sellValue = getSellValue(creature.creatureId);
+      const collectedCoins = getPendingCoins(creature);
+
+      return {
+        ...model,
+        soundCue: createSoundCue('buy'),
+        state: {
+          ...model.state,
+          coins: model.state.coins + sellValue + collectedCoins,
+          creatures: model.state.creatures.filter((item) => item.instanceId !== action.instanceId),
+          lastSavedAt: Date.now(),
+        },
+      };
+    }
+
+    case 'sacrifice': {
+      const creature = model.state.creatures.find((item) => item.instanceId === action.instanceId);
+      if (!creature || model.state.portalState !== 'cracked') return model;
+
+      const gainedEnergy = creatureDefinitions[creature.creatureId].portalEnergyValue;
+      const nextEnergy = Math.min(
+        model.state.portalEnergy + gainedEnergy,
+        model.state.portalEnergyRequired,
+      );
+      const portalActivated =
+        model.state.portalState === 'cracked' && nextEnergy >= model.state.portalEnergyRequired;
+
+      return {
+        ...model,
+        portalPulseId: model.portalPulseId + 1,
+        soundCue: createSoundCue('portalTransform'),
+        toast: portalActivated ? 'Portal ativo. Mapa 2 em breve...' : null,
+        state: {
+          ...model.state,
+          coins: model.state.coins + getPendingCoins(creature),
+          creatures: model.state.creatures.filter((item) => item.instanceId !== action.instanceId),
+          portalEnergy: nextEnergy,
+          portalState: portalActivated ? 'active' : model.state.portalState,
+          unlockedMapIds: portalActivated
+            ? Array.from(new Set([...model.state.unlockedMapIds, 'map2']))
+            : model.state.unlockedMapIds,
+          lastSavedAt: Date.now(),
+        },
+      };
+    }
 
     case 'swap': {
       const source = model.state.creatures.find(
@@ -274,6 +391,51 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       };
     }
 
+    case 'swapEggs': {
+      const source = model.state.eggs.find((egg) => egg.eggId === action.sourceEggId);
+      const target = model.state.eggs.find((egg) => egg.eggId === action.targetEggId);
+
+      if (!source || !target) return model;
+
+      return {
+        ...model,
+        toast: null,
+        state: {
+          ...model.state,
+          eggs: model.state.eggs.map((egg) => {
+            if (egg.eggId === source.eggId) return { ...egg, slotIndex: target.slotIndex };
+            if (egg.eggId === target.eggId) return { ...egg, slotIndex: source.slotIndex };
+            return egg;
+          }),
+          lastSavedAt: Date.now(),
+        },
+      };
+    }
+
+    case 'swapCreatureWithEgg': {
+      const creature = model.state.creatures.find(
+        (item) => item.instanceId === action.creatureInstanceId,
+      );
+      const egg = model.state.eggs.find((item) => item.eggId === action.eggId);
+
+      if (!creature || !egg) return model;
+
+      return {
+        ...model,
+        toast: null,
+        state: {
+          ...model.state,
+          creatures: model.state.creatures.map((item) =>
+            item.instanceId === creature.instanceId ? { ...item, slotIndex: egg.slotIndex } : item,
+          ),
+          eggs: model.state.eggs.map((item) =>
+            item.eggId === egg.eggId ? { ...item, slotIndex: creature.slotIndex } : item,
+          ),
+          lastSavedAt: Date.now(),
+        },
+      };
+    }
+
     case 'environmentalTransform': {
       const source = model.state.creatures.find(
         (creature) => creature.instanceId === action.sourceInstanceId,
@@ -283,29 +445,42 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
 
       const alreadyDiscovered = model.state.discoveredCreatureIds.includes(action.resultCreatureId);
       const shouldPulsePortal = action.environmentId === 'portal';
+      const shouldCrackPortal =
+        shouldPulsePortal &&
+        action.resultCreatureId === 'umbrelume' &&
+        !model.state.discoveredCreatureIds.includes('umbrelume') &&
+        model.state.portalState === 'dormant';
+      const stateAfterCollection = removeCreaturesAndCollectPending(model.state, [
+        action.sourceInstanceId,
+      ]);
+
+      const nextState = updateHighestIncome({
+        ...stateAfterCollection,
+        creatures: [
+          ...stateAfterCollection.creatures,
+          createInstance(action.resultCreatureId, source.slotIndex),
+        ],
+        discoveredCreatureIds: alreadyDiscovered
+          ? model.state.discoveredCreatureIds
+          : [...model.state.discoveredCreatureIds, action.resultCreatureId],
+        hasSeenPortalReaction: shouldPulsePortal || model.state.hasSeenPortalReaction
+          ? true
+          : model.state.hasSeenPortalReaction,
+        portalState: shouldCrackPortal ? 'cracked' : model.state.portalState,
+        lastSavedAt: Date.now(),
+      });
 
       return {
         ...model,
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.resultCreatureId,
-        toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
+        toast: shouldCrackPortal
+          ? 'Energia Residual desbloqueada: +1/s permanente'
+          : alreadyDiscovered
+            ? null
+            : 'Nova anomalia descoberta!',
         portalPulseId: shouldPulsePortal ? model.portalPulseId + 1 : model.portalPulseId,
         soundCue: createSoundCue('portalTransform'),
-        state: {
-          ...model.state,
-          creatures: [
-            ...model.state.creatures.filter(
-              (creature) => creature.instanceId !== action.sourceInstanceId,
-            ),
-            createInstance(action.resultCreatureId, source.slotIndex),
-          ],
-          discoveredCreatureIds: alreadyDiscovered
-            ? model.state.discoveredCreatureIds
-            : [...model.state.discoveredCreatureIds, action.resultCreatureId],
-          hasSeenPortalReaction: shouldPulsePortal || model.state.hasSeenPortalReaction
-            ? true
-            : model.state.hasSeenPortalReaction,
-          lastSavedAt: Date.now(),
-        },
+        state: nextState,
       };
     }
 
@@ -313,6 +488,23 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       const alreadyDiscovered = model.state.discoveredCreatureIds.includes(action.resultCreatureId);
       const nextCreature = createInstance(action.resultCreatureId, action.targetSlotIndex);
       const shouldPulsePortal = action.resultCreatureId === 'umbrelume';
+      const stateAfterCollection = removeCreaturesAndCollectPending(model.state, [
+        action.sourceInstanceId,
+        action.targetInstanceId,
+      ]);
+
+      const nextState = updateHighestIncome({
+        ...stateAfterCollection,
+        creatures: [...stateAfterCollection.creatures, nextCreature],
+        discoveredCreatureIds: alreadyDiscovered
+          ? model.state.discoveredCreatureIds
+          : [...model.state.discoveredCreatureIds, action.resultCreatureId],
+        hasSeenPortalReaction: shouldPulsePortal || model.state.hasSeenPortalReaction
+          ? true
+          : model.state.hasSeenPortalReaction,
+        hasCompletedFirstMergeTutorial: true,
+        lastSavedAt: Date.now(),
+      });
 
       return {
         ...model,
@@ -320,25 +512,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
         portalPulseId: shouldPulsePortal ? model.portalPulseId + 1 : model.portalPulseId,
         soundCue: createSoundCue('merge'),
-        state: {
-          ...model.state,
-          creatures: [
-            ...model.state.creatures.filter(
-              (creature) =>
-                creature.instanceId !== action.sourceInstanceId &&
-                creature.instanceId !== action.targetInstanceId,
-            ),
-            nextCreature,
-          ],
-          discoveredCreatureIds: alreadyDiscovered
-            ? model.state.discoveredCreatureIds
-            : [...model.state.discoveredCreatureIds, action.resultCreatureId],
-          hasSeenPortalReaction: shouldPulsePortal || model.state.hasSeenPortalReaction
-            ? true
-            : model.state.hasSeenPortalReaction,
-          hasCompletedFirstMergeTutorial: true,
-          lastSavedAt: Date.now(),
-        },
+        state: nextState,
       };
     }
 
@@ -370,19 +544,49 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         toast: null,
       };
 
+    case 'collectCreatureCoins': {
+      const creature = model.state.creatures.find((item) => item.instanceId === action.instanceId);
+      if (!creature) return model;
+
+      const collectedCoins = getPendingCoins(creature);
+      if (collectedCoins <= 0) return model;
+
+      return {
+        ...model,
+        state: {
+          ...model.state,
+          coins: model.state.coins + collectedCoins,
+          creatures: model.state.creatures.map((item) =>
+            item.instanceId === action.instanceId ? { ...item, pendingCoins: 0 } : item,
+          ),
+          lastSavedAt: Date.now(),
+        },
+      };
+    }
+
+    case 'dismissWelcome':
+      return {
+        ...model,
+        state: {
+          ...model.state,
+          hasSeenWelcomeModal: true,
+          lastSavedAt: Date.now(),
+        },
+      };
+
     case 'tick': {
       const elapsedSeconds = action.elapsedSeconds;
-      const productionPerSecond = getProductionPerSecond(model.state.creatures);
-      const hasIncubatingEgg = model.state.eggs.length > 0;
-      const shouldResolveEggCycle =
-        !hasIncubatingEgg && model.state.remainingEggSpawnSeconds <= elapsedSeconds;
+      const productionPerSecond = getTotalProductionPerSecond(model.state);
+      const residualIncome =
+        getPortalResidualIncomePerSecond(model.state.portalState) * elapsedSeconds;
+      const shouldResolveEggCycle = model.state.remainingEggSpawnSeconds <= elapsedSeconds;
       const canSpawnEgg = shouldResolveEggCycle && hasHatchCandidate(model.state);
       const freeSlot = canSpawnEgg
         ? findRandomFreeSlot(model.state.creatures, model.state.eggs)
         : null;
       const nextEggs =
         canSpawnEgg && freeSlot !== null
-          ? [...model.state.eggs, createEgg(freeSlot)]
+          ? [...model.state.eggs, createEgg(freeSlot, 'free')]
           : model.state.eggs;
       const spawnedEgg = nextEggs.length !== model.state.eggs.length;
       const missedEgg = canSpawnEgg && freeSlot === null;
@@ -408,7 +612,6 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       const hatchedCreatures = nextEggs
         .filter((egg) => hatchedCreatureIdByEggId.has(egg.eggId))
         .map((egg) => createInstance(hatchedCreatureIdByEggId.get(egg.eggId)!, egg.slotIndex));
-      const shouldPauseEggCycle = incubatingEggs.length > 0;
       const discoveredCreatureIds = [...model.state.discoveredCreatureIds];
       let hatchedDiscoveryId: CreatureId | null = null;
 
@@ -423,6 +626,18 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           hatchedDiscoveryId = hatchedDiscoveryId ?? hatchedCreature.creatureId;
         }
       }
+      const nextCreatures =
+        hatchedCreatures.length > 0
+          ? [...model.state.creatures, ...hatchedCreatures]
+          : model.state.creatures;
+      const creaturesWithProduction = nextCreatures.map((creature) => ({
+        ...creature,
+        pendingCoins: Math.min(
+          getPendingCoinCap(creature),
+          (creature.pendingCoins ?? 0) +
+            creatureDefinitions[creature.creatureId].coinsPerSecond * elapsedSeconds,
+        ),
+      }));
 
       return {
         ...model,
@@ -442,24 +657,17 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           : missedEgg
             ? 'Uma anomalia tentou se manifestar, mas nao havia espaco disponivel.'
             : model.toast,
-        state: {
+        state: updateHighestIncome({
           ...model.state,
-          coins: model.state.coins + productionPerSecond * elapsedSeconds,
-          creatures:
-            hatchedCreatures.length > 0
-              ? [...model.state.creatures, ...hatchedCreatures]
-              : model.state.creatures,
+          coins: model.state.coins + residualIncome,
+          creatures: creaturesWithProduction,
           eggs: incubatingEggs,
           discoveredCreatureIds,
           remainingEggSpawnSeconds:
-            spawnedEgg || missedEgg || hatchedCreatures.length > 0
+            spawnedEgg || missedEgg
               ? gameConfig.cosmicEggSpawnSeconds
-              : shouldPauseEggCycle
-                ? model.state.remainingEggSpawnSeconds <= elapsedSeconds
-                  ? gameConfig.cosmicEggSpawnSeconds
-                  : model.state.remainingEggSpawnSeconds
-                : Math.max(0, model.state.remainingEggSpawnSeconds - elapsedSeconds),
-        },
+              : Math.max(0, model.state.remainingEggSpawnSeconds - elapsedSeconds),
+        }),
       };
     }
 
@@ -487,8 +695,8 @@ export function applyOfflineReward(state: GameState): {
   const offlineProductionCapSeconds =
     state.offlineProductionCapSeconds ?? gameConfig.offlineRewardCapSeconds;
   const cappedSecondsAway = Math.min(secondsAway, offlineProductionCapSeconds);
-  const production = getProductionPerSecond(state.creatures);
-  const coins = production * cappedSecondsAway;
+  const totalProduction = getTotalProductionPerSecond(state);
+  const coins = totalProduction * cappedSecondsAway;
 
   if (coins <= 0 || secondsAway < 10) {
     return {

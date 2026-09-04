@@ -4,6 +4,8 @@ import type { EggState } from '../types/game';
 
 interface CosmicEggProps {
   egg: EggState;
+  isDragging?: boolean;
+  onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
 }
 
 function formatEggTime(seconds: number) {
@@ -14,20 +16,24 @@ function formatEggTime(seconds: number) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
-export function CosmicEgg({ egg }: CosmicEggProps) {
+export function CosmicEgg({ egg, isDragging = false, onPointerDown }: CosmicEggProps) {
   const isHatching =
     egg.remainingIncubationSeconds <= gameConfig.cosmicEggHatchingThresholdSeconds;
   const wobbleDelay = -((egg.birthId % 9) * 0.12);
 
   return (
-    <div
-      className={`cosmicEgg ${isHatching ? 'cosmicEgg--hatching' : ''}`}
+    <button
+      className={`cosmicEgg ${isHatching ? 'cosmicEgg--hatching' : ''} ${
+        isDragging ? 'cosmicEgg--dragging' : ''
+      }`}
+      type="button"
       aria-label="Ovo cosmico incubando"
+      onPointerDown={onPointerDown}
       style={{ '--egg-wobble-delay': `${wobbleDelay}s` } as React.CSSProperties}
     >
       <span className="cosmicEgg__shadow" />
       <img className="cosmicEgg__image" src={cosmicEggImage} alt="" draggable="false" />
       <span className="cosmicEgg__timer">{formatEggTime(egg.remainingIncubationSeconds)}</span>
-    </div>
+    </button>
   );
 }

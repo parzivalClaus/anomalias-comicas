@@ -1,29 +1,23 @@
 import { X } from 'lucide-react';
-import { creatureDefinitions, dexOrder } from '../data/creatures';
-import type { CreatureId } from '../types/game';
-import { formatCoins, getPurchasePrice } from '../utils/economy';
+import cosmicEggImage from '../assets/ui/ovo-cosmico.png';
+import { gameConfig } from '../data/gameConfig';
+import { formatCoins, getEggPurchasePrice } from '../utils/economy';
 
 interface AnomalyShopProps {
   coins: number;
-  discoveredCreatureIds: CreatureId[];
-  purchaseCounts: Partial<Record<CreatureId, number>>;
-  onBuy: (creatureId: CreatureId) => void;
+  highestIncomePerSecond: number;
+  onBuyEgg: () => void;
   onClose: () => void;
 }
 
 export function AnomalyShop({
   coins,
-  discoveredCreatureIds,
-  purchaseCounts,
-  onBuy,
+  highestIncomePerSecond,
+  onBuyEgg,
   onClose,
 }: AnomalyShopProps) {
-  const discovered = new Set(discoveredCreatureIds);
-  const shopItems = dexOrder.filter(
-    (definition) =>
-      definition.purchasable &&
-      (definition.startsUnlockedInShop || discovered.has(definition.id)),
-  );
+  const price = getEggPurchasePrice(highestIncomePerSecond);
+  const canAfford = coins >= price;
 
   return (
     <div className="shopBackdrop" role="presentation" onClick={onClose}>
@@ -38,7 +32,7 @@ export function AnomalyShop({
         <div className="shopSheet__header">
           <div>
             <p className="modal__eyebrow">Loja de Anomalias</p>
-            <h2>Comprar Anomalia</h2>
+            <h2>Comprar Ovo</h2>
           </div>
           <button className="iconButton" type="button" onClick={onClose} aria-label="Fechar loja">
             <X size={20} />
@@ -46,31 +40,24 @@ export function AnomalyShop({
         </div>
 
         <div className="shopList">
-          {shopItems.map((definition) => {
-            const price = getPurchasePrice(definition.id, purchaseCounts);
-            const canAfford = coins >= price;
-
-            return (
-              <article className="shopItem" key={definition.id}>
-                <div className="shopItem__portrait">
-                  <img src={definition.image} alt="" />
-                </div>
-                <div className="shopItem__info">
-                  <p>#{definition.dexNumber.toString().padStart(3, '0')}</p>
-                  <h3>{definition.name}</h3>
-                  <span>+{formatCoins(definition.coinsPerSecond)}/s</span>
-                </div>
-                <button
-                  className="shopItem__buy"
-                  type="button"
-                  disabled={!canAfford}
-                  onClick={() => onBuy(definition.id)}
-                >
-                  <span>{formatCoins(price)}</span>
-                </button>
-              </article>
-            );
-          })}
+          <article className="shopItem">
+            <div className="shopItem__portrait shopItem__portrait--egg">
+              <img src={cosmicEggImage} alt="" />
+            </div>
+            <div className="shopItem__info">
+              <p>Incubacao {gameConfig.cosmicEggIncubationSeconds}s</p>
+              <h3>Ovo Cosmico</h3>
+              <span>Gera anomalia-base</span>
+            </div>
+            <button
+              className="shopItem__buy"
+              type="button"
+              disabled={!canAfford}
+              onClick={onBuyEgg}
+            >
+              <span>{formatCoins(price)}</span>
+            </button>
+          </article>
         </div>
       </section>
     </div>
