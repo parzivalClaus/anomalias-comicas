@@ -89,12 +89,16 @@ export function createInstance(creatureId: CreatureId, slotIndex: number): Creat
   };
 }
 
-function createEgg(slotIndex: number, source: EggSource = 'free'): EggState {
+function createEgg(
+  slotIndex: number,
+  source: EggSource = 'free',
+  incubationSeconds: number = gameConfig.cosmicEggIncubationSeconds,
+): EggState {
   idCounter += 1;
   return {
     eggId: globalThis.crypto?.randomUUID?.() ?? `egg-${Date.now()}-${idCounter}`,
     slotIndex,
-    remainingIncubationSeconds: gameConfig.cosmicEggIncubationSeconds,
+    remainingIncubationSeconds: incubationSeconds,
     birthId: Date.now() + idCounter,
     source,
   };
@@ -104,7 +108,13 @@ export function getInitialState(): GameState {
   return {
     coins: gameConfig.startingCoins,
     creatures: [],
-    eggs: [createEgg(Math.floor(Math.random() * gameConfig.boardSlots))],
+    eggs: [
+      createEgg(
+        Math.floor(Math.random() * gameConfig.boardSlots),
+        'free',
+        gameConfig.initialCosmicEggIncubationSeconds,
+      ),
+    ],
     discoveredCreatureIds: [],
     purchaseCounts: {},
     purchasedEggCount: 0,
