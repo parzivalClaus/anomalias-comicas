@@ -86,6 +86,7 @@ export interface GameState {
   highestIncomePerSecond: number;
   lastSavedAt: number;
   hasSeenWelcomeModal: boolean;
+  hasSeenCloudSavePrompt: boolean;
   hasSeenPortalReaction: boolean;
   hasCompletedFirstMergeTutorial: boolean;
   portalState: PortalState;
@@ -104,7 +105,7 @@ export interface OfflineReward {
 }
 
 export interface VersionedGameSave {
-  saveVersion: 1 | 2 | 3 | 4 | 5;
+  saveVersion: 1 | 2 | 3 | 4 | 5 | 6;
   state: GameState;
   updatedAt: string;
 }

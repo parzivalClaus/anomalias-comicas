@@ -56,6 +56,7 @@ export type GameAction =
   | { type: 'collectCreatureCoins'; instanceId: string }
   | { type: 'tick'; elapsedSeconds: number }
   | { type: 'dismissWelcome' }
+  | { type: 'dismissCloudSavePrompt' }
   | { type: 'dismissDiscovery' }
   | { type: 'reset' }
   | { type: 'touchTimestamp' };
@@ -121,6 +122,7 @@ export function getInitialState(): GameState {
     highestIncomePerSecond: 0,
     lastSavedAt: Date.now(),
     hasSeenWelcomeModal: false,
+    hasSeenCloudSavePrompt: false,
     hasSeenPortalReaction: false,
     hasCompletedFirstMergeTutorial: false,
     portalState: 'dormant',
@@ -583,6 +585,16 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         state: {
           ...model.state,
           hasSeenWelcomeModal: true,
+          lastSavedAt: Date.now(),
+        },
+      };
+
+    case 'dismissCloudSavePrompt':
+      return {
+        ...model,
+        state: {
+          ...model.state,
+          hasSeenCloudSavePrompt: true,
           lastSavedAt: Date.now(),
         },
       };

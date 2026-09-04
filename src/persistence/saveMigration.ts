@@ -2,7 +2,7 @@ import { gameConfig } from '../data/gameConfig';
 import type { GameState, VersionedGameSave } from '../types/game';
 import { getTotalProductionPerSecond } from '../utils/economy';
 
-export const currentSaveVersion = 5;
+export const currentSaveVersion = 6;
 
 function isGameState(value: unknown): value is GameState {
   if (!value || typeof value !== 'object') return false;
@@ -101,6 +101,7 @@ function normalizeState(state: GameState): GameState {
       currentIncomePerSecond,
     ),
     hasSeenWelcomeModal: state.hasSeenWelcomeModal ?? true,
+    hasSeenCloudSavePrompt: state.hasSeenCloudSavePrompt ?? false,
     hasSeenPortalReaction: state.hasSeenPortalReaction ?? false,
     hasCompletedFirstMergeTutorial: state.hasCompletedFirstMergeTutorial ?? false,
     portalState,
@@ -127,7 +128,7 @@ export function migrateSave(value: unknown): VersionedGameSave | null {
 
   if ('saveVersion' in value && 'state' in value) {
     const versioned = value as VersionedGameSave;
-    if (![1, 2, 3, 4, 5].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
+    if (![1, 2, 3, 4, 5, 6].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
       return null;
     }
 

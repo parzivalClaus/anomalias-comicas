@@ -1,4 +1,4 @@
-import { RotateCcw, Trash2 } from 'lucide-react';
+import { Cloud, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import cosmicEggImage from './assets/ui/ovo-cosmico.png';
 import { AccountButton } from './components/AccountButton';
@@ -11,6 +11,7 @@ import { EggTimer } from './components/EggTimer';
 import { GameBoard } from './components/GameBoard';
 import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { useAuth } from './auth/AuthProvider';
+import { signInWithGoogle } from './auth/authService';
 import { creatureDefinitions, dexOrder } from './data/creatures';
 import { gameConfig } from './data/gameConfig';
 import { useGameLoop } from './hooks/useGameLoop';
@@ -35,6 +36,8 @@ function App() {
   const [model, dispatch] = useReducer(reducer, initial.model);
   const [dragState, setDragState] = useState<DragState>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
+  const [isCloudSavePromptOpen, setIsCloudSavePromptOpen] = useState(false);
+  const [isCloudSavePromptSigningIn, setIsCloudSavePromptSigningIn] = useState(false);
   const [isSellMode, setIsSellMode] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
@@ -112,12 +115,31 @@ function App() {
     productionPerSecond > 0
       ? (pendingSacrificeProductionLoss / productionPerSecond) * 100
       : 0;
-  const { user } = useAuth();
+  const { user, isConfigured, isLoading: isAuthLoading } = useAuth();
   const { syncStatus } = useCloudSync({
     user,
     state: model.state,
     onApplyState: (state, message) => dispatch({ type: 'replaceState', state, toast: message }),
   });
+  const hasPlayedEnoughForCloudPrompt =
+    model.state.hasCompletedFirstMergeTutorial ||
+    model.state.discoveredCreatureIds.length >= 2 ||
+    model.state.highestIncomePerSecond >= 2;
+  const canShowCloudSavePrompt =
+    isConfigured &&
+    !user &&
+    !isAuthLoading &&
+    model.state.hasSeenWelcomeModal &&
+    !model.state.hasSeenCloudSavePrompt &&
+    hasPlayedEnoughForCloudPrompt;
+  const hasBlockingModal =
+    isDexOpen ||
+    isResetConfirmOpen ||
+    Boolean(pendingSale) ||
+    Boolean(pendingSacrifice) ||
+    isMapPreviewOpen ||
+    Boolean(visibleDiscoveryId) ||
+    Boolean(initial.offlineReward);
 
   useGameLoop(dispatch);
   useAutosave(model.state);
@@ -131,6 +153,18 @@ function App() {
   function recordInteraction() {
     setLastInteractionAt(Date.now());
     setMergeTutorialPhase('idle');
+  }
+
+  async function handleCloudPromptSignIn() {
+    setIsCloudSavePromptSigningIn(true);
+    dispatch({ type: 'dismissCloudSavePrompt' });
+
+    try {
+      await signInWithGoogle();
+    } catch {
+      setIsCloudSavePromptSigningIn(false);
+      dispatch({ type: 'showToast', message: 'NÃ£o foi possÃ­vel abrir o login.' });
+    }
   }
 
   const collectCreatureCoins = useCallback(
@@ -461,6 +495,32 @@ function App() {
   }, [model.toast]);
 
   useEffect(() => {
+    if (!canShowCloudSavePrompt || hasBlockingModal || dragState || isCloudSavePromptOpen) {
+      return;
+    }
+
+    const promptDelay = Math.max(0, 5200 - (Date.now() - lastInteractionAt));
+    const timeout = window.setTimeout(() => {
+      setIsCloudSavePromptOpen(true);
+    }, promptDelay);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    canShowCloudSavePrompt,
+    dragState,
+    hasBlockingModal,
+    isCloudSavePromptOpen,
+    lastInteractionAt,
+  ]);
+
+  useEffect(() => {
+    if (user) {
+      setIsCloudSavePromptOpen(false);
+      setIsCloudSavePromptSigningIn(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (!mergeTutorialHint || model.state.hasCompletedFirstMergeTutorial || dragState) {
       setMergeTutorialPhase('idle');
       return;
@@ -706,6 +766,48 @@ function App() {
             >
               Explorar
             </button>
+          </section>
+        </div>
+      ) : null}
+
+      {isCloudSavePromptOpen ? (
+        <div className="modalBackdrop" role="presentation">
+          <section
+            className="modal cloudSavePrompt"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cloud-save-title"
+          >
+            <span className="cloudSavePrompt__icon" aria-hidden="true">
+              <Cloud size={28} />
+            </span>
+            <p className="modal__eyebrow">Salvar progresso</p>
+            <h2 id="cloud-save-title">Proteger seu universo?</h2>
+            <p>
+              Conecte sua conta Google para manter seu save seguro e continuar de onde parou em
+              outro dispositivo.
+            </p>
+            <div className="cloudSavePrompt__actions">
+              <button
+                className="primaryButton"
+                type="button"
+                disabled={isCloudSavePromptSigningIn}
+                onClick={handleCloudPromptSignIn}
+              >
+                {isCloudSavePromptSigningIn ? 'Abrindo...' : 'Conectar Google'}
+              </button>
+              <button
+                className="secondaryButton"
+                type="button"
+                disabled={isCloudSavePromptSigningIn}
+                onClick={() => {
+                  setIsCloudSavePromptOpen(false);
+                  dispatch({ type: 'dismissCloudSavePrompt' });
+                }}
+              >
+                Agora nÃ£o
+              </button>
+            </div>
           </section>
         </div>
       ) : null}

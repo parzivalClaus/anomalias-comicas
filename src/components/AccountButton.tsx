@@ -19,6 +19,8 @@ function getSyncLabel(syncStatus: SyncStatus) {
 export function AccountButton({ syncStatus }: AccountButtonProps) {
   const { user, isConfigured, isLoading } = useAuth();
   const [showSyncedStatus, setShowSyncedStatus] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const isBusy = isLoading || isSigningIn;
 
   useEffect(() => {
     if (syncStatus !== 'synced') {
@@ -63,10 +65,20 @@ export function AccountButton({ syncStatus }: AccountButtonProps) {
     );
   }
 
+  async function handleSignIn() {
+    setIsSigningIn(true);
+
+    try {
+      await signInWithGoogle();
+    } catch {
+      setIsSigningIn(false);
+    }
+  }
+
   return (
-    <button className="accountButton" type="button" disabled={isLoading} onClick={signInWithGoogle}>
+    <button className="accountButton" type="button" disabled={isBusy} onClick={handleSignIn}>
       <Cloud size={14} aria-hidden="true" />
-      <span>{isLoading ? '...' : 'Salvar progresso'}</span>
+      <span>{isBusy ? 'Abrindo...' : 'Salvar progresso'}</span>
     </button>
   );
 }
