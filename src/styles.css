@@ -1855,7 +1855,8 @@ button {
 
   .gameStage {
     --mobile-safe-gap: 12px;
-    --mobile-crop-x: max(0px, calc((100% - 100vw) / 2));
+    --mobile-stage-width: max(100vw, calc(100dvh * 941 / 1672));
+    --mobile-crop-x: max(0px, calc((var(--mobile-stage-width) - 100vw) / 2));
     --edge-gap: max(
       var(--mobile-safe-gap),
       calc(var(--mobile-crop-x) + var(--mobile-safe-gap)),
@@ -1864,13 +1865,32 @@ button {
     );
     --top-gap: max(var(--mobile-safe-gap), env(safe-area-inset-top));
     --bottom-gap: max(var(--mobile-safe-gap), env(safe-area-inset-bottom));
-    width: max(100vw, calc(100dvh * 941 / 1672));
+    width: var(--mobile-stage-width);
     height: 100dvh;
     max-width: none;
     border-radius: 0;
   }
 
+  .coinHud,
+  .accountButton {
+    left: var(--edge-gap);
+  }
+
+  .resetButton {
+    right: var(--edge-gap);
+  }
+
   .sideActions {
     right: var(--edge-gap);
+  }
+
+  .portalHint {
+    left: auto;
+    right: var(--edge-gap);
+    width: min(38%, 210px);
+  }
+
+  .actionBar {
+    bottom: var(--bottom-gap);
   }
 }
