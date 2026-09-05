@@ -1612,6 +1612,17 @@ button {
   font-weight: 900;
 }
 
+.offline__adMessage {
+  padding: 0.58rem 0.72rem;
+  border: 1px solid rgba(255, 231, 133, 0.34);
+  border-radius: 12px;
+  background: rgba(45, 32, 10, 0.38);
+  color: #fff1a1;
+  font-size: 0.88rem;
+  font-weight: 850;
+  line-height: 1.32;
+}
+
 .offline__actions {
   display: grid;
   gap: 10px;

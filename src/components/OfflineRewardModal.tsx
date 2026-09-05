@@ -6,6 +6,7 @@ interface OfflineRewardModalProps {
   reward: OfflineReward;
   isRewardedAdAvailable: boolean;
   isPending: boolean;
+  rewardedAdMessage: string | null;
   onCollect: () => void;
   onCollectDouble: () => void;
 }
@@ -30,6 +31,7 @@ export function OfflineRewardModal({
   reward,
   isRewardedAdAvailable,
   isPending,
+  rewardedAdMessage,
   onCollect,
   onCollectDouble,
 }: OfflineRewardModalProps) {
@@ -49,6 +51,11 @@ export function OfflineRewardModal({
         </p>
         {reward.capReached ? (
           <p className="offline__cap">Limite de produção offline atingido.</p>
+        ) : null}
+        {rewardedAdMessage ? (
+          <p className="offline__adMessage" role="status">
+            {rewardedAdMessage}
+          </p>
         ) : null}
         <div className="offline__actions">
           <button className="secondaryButton" type="button" disabled={isPending} onClick={onCollect}>

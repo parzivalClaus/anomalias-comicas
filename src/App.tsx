@@ -72,6 +72,7 @@ function App() {
   const [isCloudSavePromptSigningIn, setIsCloudSavePromptSigningIn] = useState(false);
   const [isRewardedAdAvailable, setIsRewardedAdAvailable] = useState(false);
   const [isRewardedAdPending, setIsRewardedAdPending] = useState(false);
+  const [rewardedAdMessage, setRewardedAdMessage] = useState<string | null>(null);
   const [isSellMode, setIsSellMode] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
@@ -302,6 +303,7 @@ function App() {
     if (hasClaimedOfflineRewardRef.current) return;
     if (isRewardedAdPending && !allowWhileRewardedAdPending) return;
 
+    setRewardedAdMessage(null);
     hasClaimedOfflineRewardRef.current = true;
     shouldSaveOfflineCollectionRef.current = true;
     dispatch({ type: 'collectOfflineReward', reward: initial.offlineReward, multiplier });
@@ -312,6 +314,7 @@ function App() {
     if (!initial.offlineReward || hasClaimedOfflineRewardRef.current || isRewardedAdPending) return;
 
     setIsRewardedAdPending(true);
+    setRewardedAdMessage(null);
 
     try {
       const result = await rewardedAdService.showRewardedAd('offline_reward');
@@ -325,13 +328,11 @@ function App() {
         setIsRewardedAdAvailable(false);
       }
 
-      dispatch({
-        type: 'showToast',
-        message:
-          result === 'closed'
-            ? 'Anúncio fechado. Recompensa normal mantida.'
-            : 'Anúncio indisponível. Recompensa normal mantida.',
-      });
+      setRewardedAdMessage(
+        result === 'closed'
+          ? 'Anúncio fechado. Você ainda pode coletar a recompensa normal.'
+          : 'Não foi possível carregar o anúncio. Você ainda pode coletar a recompensa normal.',
+      );
     } finally {
       setIsRewardedAdPending(false);
     }
@@ -1256,6 +1257,7 @@ function App() {
           reward={initial.offlineReward}
           isRewardedAdAvailable={isRewardedAdAvailable}
           isPending={isRewardedAdPending || hasClaimedOfflineRewardRef.current}
+          rewardedAdMessage={rewardedAdMessage}
           onCollect={() => handleOfflineRewardCollect(1)}
           onCollectDouble={handleRewardedOfflineReward}
         />
