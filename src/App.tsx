@@ -661,7 +661,9 @@ function App() {
             }
           }}
         />
-        <div className="portalHint" aria-hidden="true" />
+        {model.state.portalState === 'dormant' ? (
+          <div className="portalHint" aria-hidden="true" />
+        ) : null}
         {model.state.portalState !== 'dormant' ? (
           <div
             className={`portalMeter ${
