@@ -18,6 +18,7 @@ import {
   getTotalProductionPerSecond,
 } from '../utils/economy';
 import type { SoundCueType } from '../utils/sound';
+import { logSaveDebug } from '../utils/saveDebug';
 
 export type DragState = {
   kind: 'creature' | 'egg';
@@ -53,6 +54,7 @@ export type GameAction =
   | { type: 'replaceState'; state: GameState; toast?: string }
   | { type: 'showToast'; message: string }
   | { type: 'clearToast' }
+  | { type: 'collectOfflineReward'; reward: OfflineReward }
   | { type: 'collectCreatureCoins'; instanceId: string }
   | { type: 'tick'; elapsedSeconds: number }
   | { type: 'dismissWelcome' }
@@ -559,6 +561,30 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         toast: null,
       };
 
+    case 'collectOfflineReward': {
+      const now = Date.now();
+      const nextState = {
+        ...model.state,
+        coins: model.state.coins + action.reward.coins,
+        lastSavedAt: now,
+      };
+
+      logSaveDebug('OFFLINE_REWARD_COLLECTED', {
+        source: 'memory',
+        state: nextState,
+        extra: {
+          rewardCoins: action.reward.coins,
+          secondsAway: action.reward.secondsAway,
+          capReached: action.reward.capReached,
+        },
+      });
+
+      return {
+        ...model,
+        state: nextState,
+      };
+    }
+
     case 'collectCreatureCoins': {
       const creature = model.state.creatures.find((item) => item.instanceId === action.instanceId);
       if (!creature) return model;
@@ -711,10 +737,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
   }
 }
 
-export function applyOfflineReward(state: GameState): {
-  state: GameState;
-  reward: OfflineReward | null;
-} {
+export function calculateOfflineReward(state: GameState): OfflineReward | null {
   const now = Date.now();
   const secondsAway = Math.max(0, Math.floor((now - state.lastSavedAt) / 1000));
   const offlineProductionCapSeconds =
@@ -726,18 +749,12 @@ export function applyOfflineReward(state: GameState): {
   );
 
   if (coins <= 0 || secondsAway < 10) {
-    return {
-      state: { ...state, offlineProductionCapSeconds, lastSavedAt: now },
-      reward: null,
-    };
+    return null;
   }
 
   return {
-    state: { ...state, coins: state.coins + coins, offlineProductionCapSeconds, lastSavedAt: now },
-    reward: {
-      coins,
-      secondsAway: cappedSecondsAway,
-      capReached: secondsAway >= offlineProductionCapSeconds,
-    },
+    coins,
+    secondsAway: cappedSecondsAway,
+    capReached: secondsAway >= offlineProductionCapSeconds,
   };
 }

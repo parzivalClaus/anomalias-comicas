@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { GameState, VersionedGameSave } from '../types/game';
+import { logSaveDebug } from '../utils/saveDebug';
 import { createVersionedSave, migrateSave } from './saveMigration';
 
 interface CloudSaveRow {
@@ -19,19 +20,26 @@ export async function loadCloudSave(userId: string): Promise<VersionedGameSave |
     .maybeSingle<CloudSaveRow>();
 
   if (error) throw error;
-  if (!data) return null;
+  if (!data) {
+    logSaveDebug('CLOUD_SAVE_LOADED', { source: 'none' });
+    return null;
+  }
 
-  return migrateSave({
+  const save = migrateSave({
     saveVersion: data.save_version,
     state: data.state,
     updatedAt: data.updated_at,
   });
+  logSaveDebug('CLOUD_SAVE_LOADED', { source: save ? 'cloud' : 'none', save });
+
+  return save;
 }
 
 export async function saveCloud(userId: string, state: GameState) {
   if (!supabase) return;
 
   const save = createVersionedSave({ ...state, lastSavedAt: Date.now() });
+  logSaveDebug('CLOUD_SYNC_STARTED', { source: 'cloud', save });
 
   const { error } = await supabase.from('game_saves').upsert({
     user_id: userId,
@@ -41,4 +49,5 @@ export async function saveCloud(userId: string, state: GameState) {
   });
 
   if (error) throw error;
+  logSaveDebug('CLOUD_SYNC_FINISHED', { source: 'cloud', save });
 }

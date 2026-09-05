@@ -16,7 +16,7 @@ import { creatureDefinitions, dexOrder } from './data/creatures';
 import { gameConfig } from './data/gameConfig';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
-import { reducer, type DragState } from './state/gameStore';
+import { calculateOfflineReward, reducer, type DragState } from './state/gameStore';
 import type { CreatureInstance, EggState, EnvironmentId } from './types/game';
 import {
   formatCoins,
@@ -30,6 +30,8 @@ import { findEnvironmentalHint, findMergeTutorialHint } from './utils/hints';
 import { evaluateMerge } from './utils/merge';
 import { playSoundCue, unlockGameAudio } from './utils/sound';
 import { useCloudSync } from './persistence/useCloudSync';
+import { saveLocal } from './persistence/localSave';
+import { logSaveDebug } from './utils/saveDebug';
 
 function App() {
   const initial = useInitialGameModel();
@@ -61,6 +63,8 @@ function App() {
     Record<string, { id: number; amount: number }>
   >({});
   const recentlyCollectedCreatureIds = useRef(new Set<string>());
+  const hasCalculatedOfflineRewardRef = useRef(false);
+  const shouldSaveOfflineCollectionRef = useRef(false);
 
   const creatureProductionPerSecond = getProductionPerSecond(model.state.creatures);
   const productionPerSecond = getTotalProductionPerSecond(model.state);
@@ -116,9 +120,10 @@ function App() {
       ? (pendingSacrificeProductionLoss / productionPerSecond) * 100
       : 0;
   const { user, isConfigured, isLoading: isAuthLoading } = useAuth();
-  const { syncStatus } = useCloudSync({
+  const { syncStatus, hasResolvedInitialSync } = useCloudSync({
     user,
     state: model.state,
+    canSyncState: !initial.offlineReward,
     onApplyState: (state, message) => dispatch({ type: 'replaceState', state, toast: message }),
   });
   const hasPlayedEnoughForCloudPrompt =
@@ -142,7 +147,7 @@ function App() {
     Boolean(initial.offlineReward);
 
   useGameLoop(dispatch);
-  useAutosave(model.state);
+  useAutosave(model.state, hasResolvedInitialSync && !initial.offlineReward);
 
   useEffect(() => {
     if (!model.soundCue) return;
@@ -165,6 +170,14 @@ function App() {
       setIsCloudSavePromptSigningIn(false);
       dispatch({ type: 'showToast', message: 'NÃ£o foi possÃ­vel abrir o login.' });
     }
+  }
+
+  function handleOfflineRewardCollect() {
+    if (!initial.offlineReward) return;
+
+    shouldSaveOfflineCollectionRef.current = true;
+    dispatch({ type: 'collectOfflineReward', reward: initial.offlineReward });
+    initial.dismissOfflineReward();
   }
 
   const collectCreatureCoins = useCallback(
@@ -493,6 +506,33 @@ function App() {
     const timeout = window.setTimeout(() => dispatch({ type: 'clearToast' }), 2600);
     return () => window.clearTimeout(timeout);
   }, [model.toast]);
+
+  useEffect(() => {
+    if (shouldSaveOfflineCollectionRef.current) {
+      shouldSaveOfflineCollectionRef.current = false;
+      saveLocal(model.state);
+    }
+  }, [model.state]);
+
+  useEffect(() => {
+    if (hasCalculatedOfflineRewardRef.current || isAuthLoading || !hasResolvedInitialSync) return;
+
+    hasCalculatedOfflineRewardRef.current = true;
+    const reward = calculateOfflineReward(model.state);
+    logSaveDebug('OFFLINE_REWARD_CALCULATED', {
+      source: 'memory',
+      state: model.state,
+      coins: reward?.coins ?? 0,
+      extra: {
+        secondsAway: reward?.secondsAway ?? 0,
+        capReached: reward?.capReached ?? false,
+      },
+    });
+
+    if (reward) {
+      initial.showOfflineReward(reward);
+    }
+  }, [hasResolvedInitialSync, initial, isAuthLoading, model.state]);
 
   useEffect(() => {
     if (!canShowCloudSavePrompt || hasBlockingModal || dragState || isCloudSavePromptOpen) {
@@ -984,7 +1024,7 @@ function App() {
       {initial.offlineReward ? (
         <OfflineRewardModal
           reward={initial.offlineReward}
-          onCollect={initial.dismissOfflineReward}
+          onCollect={handleOfflineRewardCollect}
         />
       ) : null}
     </main>

@@ -6,21 +6,26 @@ import { createVersionedSave } from './saveMigration';
 import { loadLocalSave, saveVersionedLocal } from './localSave';
 import { loadCloudSave, saveCloud } from './cloudSave';
 import { chooseLastWrittenSave } from './saveSelection';
+import { logSaveDebug } from '../utils/saveDebug';
 
 export type SyncStatus = 'local-only' | 'synced' | 'pending' | 'offline' | 'error';
 
 interface UseCloudSyncOptions {
   user: User | null;
   state: GameState;
+  canSyncState?: boolean;
   onApplyState: (state: GameState, message?: string) => void;
 }
 
-export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions) {
+export function useCloudSync({ user, state, canSyncState = true, onApplyState }: UseCloudSyncOptions) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local-only');
+  const [hasResolvedInitialSync, setHasResolvedInitialSync] = useState(false);
   const hasCheckedCloudRef = useRef(false);
   const lastSyncedStateRef = useRef<GameState | null>(null);
   const latestStateRef = useRef(state);
+  const canSyncStateRef = useRef(canSyncState);
   const dirtyRef = useRef(false);
+  const hydrationGenerationRef = useRef(0);
   const pendingIndicatorTimeoutRef = useRef<number | null>(null);
 
   function setPendingStatus() {
@@ -45,8 +50,15 @@ export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions)
   }, [state]);
 
   useEffect(() => {
+    canSyncStateRef.current = canSyncState;
+  }, [canSyncState]);
+
+  useEffect(() => {
+    hydrationGenerationRef.current += 1;
+
     if (!user) {
       setSyncStatus('local-only');
+      setHasResolvedInitialSync(true);
       hasCheckedCloudRef.current = false;
       lastSyncedStateRef.current = null;
       clearPendingIndicator();
@@ -55,18 +67,32 @@ export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions)
 
     let cancelled = false;
     const userId = user.id;
+    const hydrationGeneration = hydrationGenerationRef.current;
+    setHasResolvedInitialSync(false);
 
     async function reconcileOnLogin() {
       setPendingStatus();
 
       try {
-        const local = loadLocalSave() ?? createVersionedSave(state);
+        const initialLocal = loadLocalSave() ?? createVersionedSave(latestStateRef.current);
         const cloud = await loadCloudSave(userId);
-        if (cancelled) return;
+        if (cancelled || hydrationGeneration !== hydrationGenerationRef.current) return;
+
+        const latestLocal = loadLocalSave() ?? createVersionedSave(latestStateRef.current);
+        const local = latestLocal.updatedAt >= initialLocal.updatedAt ? latestLocal : initialLocal;
 
         if (!cloud) {
+          logSaveDebug('SAVE_WINNER_SELECTED', {
+            source: 'local',
+            save: local,
+            extra: {
+              localUpdatedAt: local.updatedAt,
+              cloudUpdatedAt: null,
+            },
+          });
           await saveCloud(userId, local.state);
           lastSyncedStateRef.current = local.state;
+          dirtyRef.current = false;
           clearPendingIndicator();
           setSyncStatus('synced');
           return;
@@ -75,6 +101,14 @@ export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions)
         const selectedSave = chooseLastWrittenSave(local, cloud);
         const selectedMessage =
           selectedSave === local ? 'Save local mantido.' : 'Save da nuvem carregado.';
+        logSaveDebug('SAVE_WINNER_SELECTED', {
+          source: selectedSave === local ? 'local' : 'cloud',
+          save: selectedSave,
+          extra: {
+            localUpdatedAt: local.updatedAt,
+            cloudUpdatedAt: cloud.updatedAt,
+          },
+        });
 
         saveVersionedLocal(selectedSave);
         onApplyState(selectedSave.state, selectedMessage);
@@ -87,7 +121,10 @@ export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions)
         clearPendingIndicator();
         if (!cancelled) setSyncStatus(navigator.onLine ? 'error' : 'offline');
       } finally {
-        hasCheckedCloudRef.current = true;
+        if (!cancelled && hydrationGeneration === hydrationGenerationRef.current) {
+          hasCheckedCloudRef.current = true;
+          setHasResolvedInitialSync(true);
+        }
       }
     }
 
@@ -105,6 +142,7 @@ export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions)
 
     const userId = user.id;
     const interval = window.setInterval(async () => {
+      if (!canSyncStateRef.current) return;
       if (!dirtyRef.current) return;
 
       try {
@@ -128,6 +166,7 @@ export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions)
     const userId = user.id;
 
     function syncBeforeUnload() {
+      if (!canSyncStateRef.current) return;
       void saveCloud(userId, latestStateRef.current);
     }
 
@@ -140,6 +179,8 @@ export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions)
     const userId = user.id;
 
     async function syncOnOnline() {
+      if (!canSyncStateRef.current) return;
+
       try {
         setPendingStatus();
         await saveCloud(userId, latestStateRef.current);
@@ -156,5 +197,10 @@ export function useCloudSync({ user, state, onApplyState }: UseCloudSyncOptions)
     return () => window.removeEventListener('online', syncOnOnline);
   }, [user?.id]);
 
-  return { syncStatus };
+  return {
+    syncStatus,
+    hasResolvedInitialSync: user
+      ? hasResolvedInitialSync && hasCheckedCloudRef.current
+      : hasResolvedInitialSync,
+  };
 }

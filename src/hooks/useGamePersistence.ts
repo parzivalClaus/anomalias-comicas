@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { gameConfig } from '../data/gameConfig';
-import { applyOfflineReward, getInitialModel, type GameModel } from '../state/gameStore';
+import { getInitialModel, type GameModel } from '../state/gameStore';
 import type { GameState, OfflineReward } from '../types/game';
 import { loadLocalSave, saveLocal } from '../persistence/localSave';
 
@@ -11,17 +11,16 @@ export function loadSavedModel(): { model: GameModel; offlineReward: OfflineRewa
   if (!saved) return { model: fallback, offlineReward: null };
 
   try {
-    const rewarded = applyOfflineReward(saved.state);
     return {
       model: {
-        state: rewarded.state,
+        state: saved.state,
         latestDiscoveryId: null,
         toast: null,
         portalPulseId: 0,
         productionPulseId: 0,
         soundCue: null,
       },
-      offlineReward: rewarded.reward,
+      offlineReward: null,
     };
   } catch {
     return { model: fallback, offlineReward: null };
@@ -34,18 +33,29 @@ export function useInitialGameModel() {
     loaded.offlineReward,
   );
 
-  return { model: loaded.model, offlineReward, dismissOfflineReward: () => setOfflineReward(null) };
+  return {
+    model: loaded.model,
+    offlineReward,
+    showOfflineReward: setOfflineReward,
+    dismissOfflineReward: () => setOfflineReward(null),
+  };
 }
 
-export function useAutosave(state: GameState) {
+export function useAutosave(state: GameState, enabled = true) {
   const latestStateRef = useRef(state);
+  const enabledRef = useRef(enabled);
 
   useEffect(() => {
     latestStateRef.current = state;
   }, [state]);
 
   useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => {
+      if (!enabledRef.current) return;
       saveLocal(latestStateRef.current);
     }, gameConfig.autosaveMs);
 
@@ -54,6 +64,7 @@ export function useAutosave(state: GameState) {
 
   useEffect(() => {
     const saveNow = () => {
+      if (!enabledRef.current) return;
       saveLocal(latestStateRef.current);
     };
 
