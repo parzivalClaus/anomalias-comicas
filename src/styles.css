@@ -70,6 +70,75 @@ button {
   pointer-events: none;
 }
 
+.orientationGuard {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background:
+    linear-gradient(180deg, rgba(3, 6, 18, 0.78), rgba(3, 8, 16, 0.86)),
+    url("/backgrounds/game-board.png") center / cover no-repeat;
+  color: #f7fbff;
+  text-align: center;
+}
+
+.orientationGuard::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgba(2, 5, 14, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.orientationGuard__phone {
+  width: 54px;
+  height: 84px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 3px solid rgba(202, 255, 239, 0.86);
+  border-radius: 16px;
+  box-shadow:
+    0 0 18px rgba(105, 255, 229, 0.34),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+  transform: rotate(-90deg);
+  animation: orientationPhone 1800ms ease-in-out infinite;
+}
+
+.orientationGuard__phone span {
+  width: 18px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(202, 255, 239, 0.86);
+  transform: translateY(29px);
+}
+
+.orientationGuard h2 {
+  max-width: 360px;
+  margin: 0;
+  color: #fff1a1;
+  font-size: clamp(1.1rem, 4.6vw, 1.7rem);
+  line-height: 1.08;
+  text-shadow: 0 2px 0 rgba(42, 24, 6, 0.7);
+}
+
+.orientationGuard p {
+  max-width: 380px;
+  margin: 0;
+  color: rgba(247, 251, 255, 0.78);
+  font-size: clamp(0.84rem, 2.8vw, 1rem);
+  font-weight: 800;
+  line-height: 1.34;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.48);
+}
+
 .gameStage {
   --edge-gap: max(10px, env(safe-area-inset-left), env(safe-area-inset-right));
   --top-gap: max(10px, env(safe-area-inset-top));
@@ -1543,16 +1612,14 @@ button {
   font-weight: 900;
 }
 
-.offline__actions,
-.rewardedAdDevModal__actions {
+.offline__actions {
   display: grid;
   gap: 10px;
   margin-top: 16px;
 }
 
 .offline__actions .primaryButton,
-.offline__actions .secondaryButton,
-.rewardedAdDevModal__actions .primaryButton {
+.offline__actions .secondaryButton {
   margin-top: 0;
 }
 
@@ -1564,11 +1631,6 @@ button {
   background: linear-gradient(180deg, #ffec80, #f5a823);
   color: #1d1204;
   text-shadow: 0 1px 0 rgba(255, 247, 188, 0.9);
-}
-
-.rewardedAdDevModal p:not(.modal__eyebrow) {
-  color: rgba(247, 251, 255, 0.78);
-  font-weight: 800;
 }
 
 .welcomeModal {
@@ -2056,6 +2118,18 @@ button {
   }
 }
 
+@keyframes orientationPhone {
+  0%,
+  100% {
+    transform: rotate(-90deg);
+  }
+
+  45%,
+  65% {
+    transform: rotate(0deg);
+  }
+}
+
 @media (max-width: 600px) and (orientation: portrait) {
   .appShell {
     height: 100vh;
@@ -2109,20 +2183,17 @@ button {
   }
 }
 
-@media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) {
+@media (orientation: landscape) and (pointer: coarse) {
   .appShell {
     padding: 0;
-    place-items: center;
   }
 
   .gameStage {
-    --edge-gap: max(10px, env(safe-area-inset-left), env(safe-area-inset-right));
-    --top-gap: max(10px, env(safe-area-inset-top));
-    --bottom-gap: max(10px, env(safe-area-inset-bottom));
-    width: min(100vw, calc(100dvh * 941 / 1672));
-    height: 100dvh;
-    max-width: none;
-    border-radius: 0;
-    box-shadow: none;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .orientationGuard {
+    display: flex;
   }
 }

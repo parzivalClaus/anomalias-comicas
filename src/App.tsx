@@ -34,8 +34,6 @@ import { saveLocal } from './persistence/localSave';
 import { logSaveDebug } from './utils/saveDebug';
 import {
   rewardedAdService,
-  type RewardedAdRequest,
-  type RewardedAdResult,
 } from './ads/rewardedAdService';
 import { evolutionRecipes } from './data/evolutions';
 
@@ -74,7 +72,6 @@ function App() {
   const [isCloudSavePromptSigningIn, setIsCloudSavePromptSigningIn] = useState(false);
   const [isRewardedAdAvailable, setIsRewardedAdAvailable] = useState(false);
   const [isRewardedAdPending, setIsRewardedAdPending] = useState(false);
-  const [rewardedAdRequest, setRewardedAdRequest] = useState<RewardedAdRequest | null>(null);
   const [isSellMode, setIsSellMode] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
@@ -272,12 +269,6 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    return rewardedAdService.subscribe((request) => {
-      setRewardedAdRequest(request);
-    });
-  }, []);
-
   function recordInteraction() {
     setLastInteractionAt(Date.now());
     setMergeTutorialPhase('idle');
@@ -344,13 +335,6 @@ function App() {
     } finally {
       setIsRewardedAdPending(false);
     }
-  }
-
-  function resolveRewardedAdRequest(result: RewardedAdResult) {
-    if (!rewardedAdRequest) return;
-
-    rewardedAdService.resolveRequest(rewardedAdRequest.id, result);
-    setRewardedAdRequest(null);
   }
 
   const collectCreatureCoins = useCallback(
@@ -1014,6 +998,14 @@ function App() {
         </div>
       </div>
 
+      <section className="orientationGuard" role="status" aria-live="polite">
+        <div className="orientationGuard__phone" aria-hidden="true">
+          <span />
+        </div>
+        <h2>Vire o celular para jogar</h2>
+        <p>Anomalias Cósmicas foi pensado para funcionar em modo vertical.</p>
+      </section>
+
       {isDexOpen ? (
         <Dex
           discoveredCreatureIds={model.state.discoveredCreatureIds}
@@ -1267,44 +1259,6 @@ function App() {
           onCollect={() => handleOfflineRewardCollect(1)}
           onCollectDouble={handleRewardedOfflineReward}
         />
-      ) : null}
-
-      {rewardedAdRequest ? (
-        <div className="modalBackdrop" role="presentation">
-          <section
-            className="modal rewardedAdDevModal compactConfirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="rewarded-ad-dev-title"
-          >
-            <p className="modal__eyebrow">DEV</p>
-            <h2 id="rewarded-ad-dev-title">Simulação de anúncio recompensado</h2>
-            <p>Placement: {rewardedAdRequest.placement}</p>
-            <div className="rewardedAdDevModal__actions">
-              <button
-                className="primaryButton"
-                type="button"
-                onClick={() => resolveRewardedAdRequest('rewarded')}
-              >
-                Simular anúncio concluído
-              </button>
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={() => resolveRewardedAdRequest('closed')}
-              >
-                Simular fechamento
-              </button>
-              <button
-                className="dangerButton"
-                type="button"
-                onClick={() => resolveRewardedAdRequest('failed')}
-              >
-                Simular falha
-              </button>
-            </div>
-          </section>
-        </div>
       ) : null}
     </main>
   );

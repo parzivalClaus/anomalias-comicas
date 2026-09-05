@@ -2,54 +2,72 @@ export type RewardedAdPlacement = 'offline_reward';
 
 export type RewardedAdResult = 'rewarded' | 'closed' | 'failed' | 'unavailable';
 
-export interface RewardedAdRequest {
-  id: number;
-  placement: RewardedAdPlacement;
-}
-
 export interface RewardedAdService {
   isAvailable(): Promise<boolean>;
   showRewardedAd(placement: RewardedAdPlacement): Promise<RewardedAdResult>;
 }
 
-type RewardedAdRequestListener = (request: RewardedAdRequest) => void;
-
-class MockRewardedAdService implements RewardedAdService {
-  private nextRequestId = 0;
-  private readonly pendingRequests = new Map<number, (result: RewardedAdResult) => void>();
-  private readonly listeners = new Set<RewardedAdRequestListener>();
-
-  async isAvailable() {
-    return true;
-  }
-
-  async showRewardedAd(placement: RewardedAdPlacement) {
-    this.nextRequestId += 1;
-    const request: RewardedAdRequest = {
-      id: this.nextRequestId,
-      placement,
+type RewardedAdBridgeResult =
+  | RewardedAdResult
+  | {
+      status?: RewardedAdResult;
+      result?: RewardedAdResult;
+      rewarded?: boolean;
     };
 
-    return new Promise<RewardedAdResult>((resolve) => {
-      this.pendingRequests.set(request.id, resolve);
-      this.listeners.forEach((listener) => listener(request));
-    });
-  }
+type RewardedAdBridge = {
+  isAvailable?: () => boolean | Promise<boolean>;
+  showRewardedAd?: (placement: RewardedAdPlacement) => Promise<RewardedAdBridgeResult>;
+};
 
-  resolveRequest(id: number, result: RewardedAdResult) {
-    const resolve = this.pendingRequests.get(id);
-    if (!resolve) return;
-
-    this.pendingRequests.delete(id);
-    resolve(result);
-  }
-
-  subscribe(listener: RewardedAdRequestListener) {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+declare global {
+  interface Window {
+    anomaliasRewardedAds?: RewardedAdBridge;
   }
 }
 
-export const rewardedAdService = new MockRewardedAdService();
+class BrowserRewardedAdService implements RewardedAdService {
+  async isAvailable() {
+    const bridge = window.anomaliasRewardedAds;
+    if (!bridge?.showRewardedAd) return true;
+    if (!bridge.isAvailable) return true;
+
+    try {
+      return bridge.isAvailable();
+    } catch {
+      return false;
+    }
+  }
+
+  async showRewardedAd(placement: RewardedAdPlacement) {
+    const bridge = window.anomaliasRewardedAds;
+    if (!bridge?.showRewardedAd) return 'failed';
+
+    try {
+      const result = await bridge.showRewardedAd(placement);
+      return normalizeRewardedAdResult(result);
+    } catch {
+      return 'failed';
+    }
+  }
+}
+
+function normalizeRewardedAdResult(result: RewardedAdBridgeResult): RewardedAdResult {
+  if (typeof result === 'string') return result;
+
+  if (result.rewarded) {
+    return 'rewarded';
+  }
+
+  if (result.status) {
+    return result.status;
+  }
+
+  if (result.result) {
+    return result.result;
+  }
+
+  return 'failed';
+}
+
+export const rewardedAdService = new BrowserRewardedAdService();
