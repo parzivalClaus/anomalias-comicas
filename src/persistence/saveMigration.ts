@@ -1,5 +1,5 @@
 import { gameConfig } from '../data/gameConfig';
-import type { GameState, VersionedGameSave } from '../types/game';
+import type { GameState, SaveOwnerType, VersionedGameSave } from '../types/game';
 import { getTotalProductionPerSecond } from '../utils/economy';
 
 export const currentSaveVersion = 6;
@@ -115,11 +115,21 @@ function normalizeState(state: GameState): GameState {
   };
 }
 
-export function createVersionedSave(state: GameState): VersionedGameSave {
+interface SaveOwner {
+  ownerType: SaveOwnerType;
+  ownerUserId?: string;
+}
+
+export function createVersionedSave(
+  state: GameState,
+  owner: SaveOwner = { ownerType: 'guest' },
+): VersionedGameSave {
   return {
     saveVersion: currentSaveVersion,
     state,
     updatedAt: new Date(state.lastSavedAt).toISOString(),
+    ownerType: owner.ownerType,
+    ownerUserId: owner.ownerType === 'account' ? owner.ownerUserId : undefined,
   };
 }
 
@@ -136,6 +146,8 @@ export function migrateSave(value: unknown): VersionedGameSave | null {
       saveVersion: currentSaveVersion,
       state: normalizeState(versioned.state),
       updatedAt: versioned.updatedAt ?? new Date(versioned.state.lastSavedAt).toISOString(),
+      ownerType: versioned.ownerType ?? 'guest',
+      ownerUserId: versioned.ownerType === 'account' ? versioned.ownerUserId : undefined,
     };
   }
 

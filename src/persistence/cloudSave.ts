@@ -29,6 +29,8 @@ export async function loadCloudSave(userId: string): Promise<VersionedGameSave |
     saveVersion: data.save_version,
     state: data.state,
     updatedAt: data.updated_at,
+    ownerType: 'account',
+    ownerUserId: userId,
   });
   logSaveDebug('CLOUD_SAVE_LOADED', { source: save ? 'cloud' : 'none', save });
 
@@ -38,7 +40,10 @@ export async function loadCloudSave(userId: string): Promise<VersionedGameSave |
 export async function saveCloud(userId: string, state: GameState) {
   if (!supabase) return;
 
-  const save = createVersionedSave({ ...state, lastSavedAt: Date.now() });
+  const save = createVersionedSave(
+    { ...state, lastSavedAt: Date.now() },
+    { ownerType: 'account', ownerUserId: userId },
+  );
   logSaveDebug('CLOUD_SYNC_STARTED', { source: 'cloud', save });
 
   const { error } = await supabase.from('game_saves').upsert({

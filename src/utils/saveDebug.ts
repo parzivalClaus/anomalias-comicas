@@ -28,6 +28,8 @@ export function logSaveDebug(event: SaveDebugEvent, payload: SaveDebugPayload) {
     updatedAt: save?.updatedAt ?? null,
     lastSeenAt: state?.lastSavedAt ?? null,
     source: payload.source,
+    ownerType: save?.ownerType ?? null,
+    ownerUserId: save?.ownerUserId ?? null,
     ...payload.extra,
   });
 }

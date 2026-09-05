@@ -12,6 +12,7 @@ export type ProgressionType = 'natural' | 'environmental';
 export type PortalState = 'dormant' | 'cracked' | 'active';
 export type MapId = 'map1' | 'map2';
 export type EggSource = 'free' | 'purchased';
+export type SaveOwnerType = 'guest' | 'account';
 
 export interface CreatureDefinition {
   id: CreatureId;
@@ -108,4 +109,6 @@ export interface VersionedGameSave {
   saveVersion: 1 | 2 | 3 | 4 | 5 | 6;
   state: GameState;
   updatedAt: string;
+  ownerType: SaveOwnerType;
+  ownerUserId?: string;
 }

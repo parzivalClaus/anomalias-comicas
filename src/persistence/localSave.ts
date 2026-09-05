@@ -1,5 +1,5 @@
 import { gameConfig } from '../data/gameConfig';
-import type { GameState, VersionedGameSave } from '../types/game';
+import type { GameState, SaveOwnerType, VersionedGameSave } from '../types/game';
 import { logSaveDebug } from '../utils/saveDebug';
 import { createVersionedSave, migrateSave } from './saveMigration';
 
@@ -20,8 +20,13 @@ export function loadLocalSave(): VersionedGameSave | null {
   }
 }
 
-export function saveLocal(state: GameState) {
-  const save = createVersionedSave({ ...state, lastSavedAt: Date.now() });
+interface SaveLocalOwner {
+  ownerType: SaveOwnerType;
+  ownerUserId?: string;
+}
+
+export function saveLocal(state: GameState, owner: SaveLocalOwner = { ownerType: 'guest' }) {
+  const save = createVersionedSave({ ...state, lastSavedAt: Date.now() }, owner);
   localStorage.setItem(gameConfig.saveKey, JSON.stringify(save));
   logSaveDebug('LOCAL_SAVE_WRITTEN', { source: 'local', save });
   return save;

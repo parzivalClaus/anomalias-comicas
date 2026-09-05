@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { gameConfig } from '../data/gameConfig';
 import { getInitialModel, type GameModel } from '../state/gameStore';
-import type { GameState, OfflineReward } from '../types/game';
+import type { GameState, OfflineReward, SaveOwnerType } from '../types/game';
 import { loadLocalSave, saveLocal } from '../persistence/localSave';
 
 export function loadSavedModel(): { model: GameModel; offlineReward: OfflineReward | null } {
@@ -41,9 +41,19 @@ export function useInitialGameModel() {
   };
 }
 
-export function useAutosave(state: GameState, enabled = true) {
+interface AutosaveOwner {
+  ownerType: SaveOwnerType;
+  ownerUserId?: string;
+}
+
+export function useAutosave(
+  state: GameState,
+  enabled = true,
+  owner: AutosaveOwner = { ownerType: 'guest' },
+) {
   const latestStateRef = useRef(state);
   const enabledRef = useRef(enabled);
+  const ownerRef = useRef(owner);
 
   useEffect(() => {
     latestStateRef.current = state;
@@ -54,9 +64,13 @@ export function useAutosave(state: GameState, enabled = true) {
   }, [enabled]);
 
   useEffect(() => {
+    ownerRef.current = owner;
+  }, [owner]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => {
       if (!enabledRef.current) return;
-      saveLocal(latestStateRef.current);
+      saveLocal(latestStateRef.current, ownerRef.current);
     }, gameConfig.autosaveMs);
 
     return () => window.clearInterval(interval);
@@ -65,7 +79,7 @@ export function useAutosave(state: GameState, enabled = true) {
   useEffect(() => {
     const saveNow = () => {
       if (!enabledRef.current) return;
-      saveLocal(latestStateRef.current);
+      saveLocal(latestStateRef.current, ownerRef.current);
     };
 
     window.addEventListener('pagehide', saveNow);

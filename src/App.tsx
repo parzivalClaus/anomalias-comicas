@@ -38,6 +38,8 @@ function App() {
   const [model, dispatch] = useReducer(reducer, initial.model);
   const [dragState, setDragState] = useState<DragState>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
+  const [hasChosenGuestSession, setHasChosenGuestSession] = useState(false);
+  const [isInitialAuthSigningIn, setIsInitialAuthSigningIn] = useState(false);
   const [isCloudSavePromptOpen, setIsCloudSavePromptOpen] = useState(false);
   const [isCloudSavePromptSigningIn, setIsCloudSavePromptSigningIn] = useState(false);
   const [isSellMode, setIsSellMode] = useState(false);
@@ -126,6 +128,13 @@ function App() {
     canSyncState: !initial.offlineReward,
     onApplyState: (state, message) => dispatch({ type: 'replaceState', state, toast: message }),
   });
+  const saveOwner = user
+    ? ({ ownerType: 'account', ownerUserId: user.id } as const)
+    : ({ ownerType: 'guest' } as const);
+  const shouldShowInitialAuthPrompt =
+    isConfigured && !isAuthLoading && !user && !hasChosenGuestSession;
+  const isHydrating = isAuthLoading || Boolean(user && !hasResolvedInitialSync);
+  const isGameplayLocked = isHydrating || shouldShowInitialAuthPrompt || isInitialAuthSigningIn;
   const hasPlayedEnoughForCloudPrompt =
     model.state.hasCompletedFirstMergeTutorial ||
     model.state.discoveredCreatureIds.length >= 2 ||
@@ -134,6 +143,7 @@ function App() {
     isConfigured &&
     !user &&
     !isAuthLoading &&
+    !isGameplayLocked &&
     model.state.hasSeenWelcomeModal &&
     !model.state.hasSeenCloudSavePrompt &&
     hasPlayedEnoughForCloudPrompt;
@@ -146,8 +156,12 @@ function App() {
     Boolean(visibleDiscoveryId) ||
     Boolean(initial.offlineReward);
 
-  useGameLoop(dispatch);
-  useAutosave(model.state, hasResolvedInitialSync && !initial.offlineReward);
+  useGameLoop(dispatch, !isGameplayLocked);
+  useAutosave(
+    model.state,
+    !isGameplayLocked && hasResolvedInitialSync && !initial.offlineReward,
+    saveOwner,
+  );
 
   useEffect(() => {
     if (!model.soundCue) return;
@@ -168,6 +182,17 @@ function App() {
       await signInWithGoogle();
     } catch {
       setIsCloudSavePromptSigningIn(false);
+      dispatch({ type: 'showToast', message: 'NÃ£o foi possÃ­vel abrir o login.' });
+    }
+  }
+
+  async function handleInitialAuthSignIn() {
+    setIsInitialAuthSigningIn(true);
+
+    try {
+      await signInWithGoogle();
+    } catch {
+      setIsInitialAuthSigningIn(false);
       dispatch({ type: 'showToast', message: 'NÃ£o foi possÃ­vel abrir o login.' });
     }
   }
@@ -510,12 +535,12 @@ function App() {
   useEffect(() => {
     if (shouldSaveOfflineCollectionRef.current) {
       shouldSaveOfflineCollectionRef.current = false;
-      saveLocal(model.state);
+      saveLocal(model.state, saveOwner);
     }
-  }, [model.state]);
+  }, [model.state, saveOwner]);
 
   useEffect(() => {
-    if (hasCalculatedOfflineRewardRef.current || isAuthLoading || !hasResolvedInitialSync) return;
+    if (hasCalculatedOfflineRewardRef.current || isGameplayLocked || !hasResolvedInitialSync) return;
 
     hasCalculatedOfflineRewardRef.current = true;
     const reward = calculateOfflineReward(model.state);
@@ -532,7 +557,7 @@ function App() {
     if (reward) {
       initial.showOfflineReward(reward);
     }
-  }, [hasResolvedInitialSync, initial, isAuthLoading, model.state]);
+  }, [hasResolvedInitialSync, initial, isGameplayLocked, model.state]);
 
   useEffect(() => {
     if (!canShowCloudSavePrompt || hasBlockingModal || dragState || isCloudSavePromptOpen) {
@@ -557,6 +582,7 @@ function App() {
     if (user) {
       setIsCloudSavePromptOpen(false);
       setIsCloudSavePromptSigningIn(false);
+      setIsInitialAuthSigningIn(false);
     }
   }, [user]);
 
@@ -616,6 +642,60 @@ function App() {
       if (pauseTimeout !== null) window.clearTimeout(pauseTimeout);
     };
   }, [environmentalHintSignature]);
+
+  if (isHydrating || isInitialAuthSigningIn) {
+    return (
+      <main className="startupScreen" aria-busy="true">
+        <section className="startupPanel" aria-live="polite">
+          <p className="modal__eyebrow">Anomalias CÃ³smicas</p>
+          <h1>Anomalias CÃ³smicas</h1>
+          <span className="startupSpinner" aria-hidden="true" />
+          <p>Sincronizando...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (shouldShowInitialAuthPrompt) {
+    return (
+      <main className="startupScreen">
+        <section
+          className="modal cloudSavePrompt authStartPrompt"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="auth-start-title"
+        >
+          <span className="cloudSavePrompt__icon" aria-hidden="true">
+            <Cloud size={28} />
+          </span>
+          <p className="modal__eyebrow">Salvar progresso</p>
+          <h1 id="auth-start-title">Salve seu progresso</h1>
+          <p>
+            Entre com sua conta Google para manter suas anomalias sincronizadas entre
+            dispositivos.
+          </p>
+          <div className="cloudSavePrompt__actions">
+            <button
+              className="primaryButton"
+              type="button"
+              disabled={isInitialAuthSigningIn}
+              onClick={handleInitialAuthSignIn}
+            >
+              {isInitialAuthSigningIn ? 'Abrindo...' : 'Continuar com Google'}
+            </button>
+            <button
+              className="secondaryButton"
+              type="button"
+              disabled={isInitialAuthSigningIn}
+              onClick={() => setHasChosenGuestSession(true)}
+            >
+              Jogar sem conta
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main

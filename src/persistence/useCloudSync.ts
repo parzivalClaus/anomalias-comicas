@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { gameConfig } from '../data/gameConfig';
-import type { GameState } from '../types/game';
+import type { GameState, VersionedGameSave } from '../types/game';
 import { createVersionedSave } from './saveMigration';
 import { loadLocalSave, saveVersionedLocal } from './localSave';
 import { loadCloudSave, saveCloud } from './cloudSave';
@@ -17,7 +17,20 @@ interface UseCloudSyncOptions {
   onApplyState: (state: GameState, message?: string) => void;
 }
 
-export function useCloudSync({ user, state, canSyncState = true, onApplyState }: UseCloudSyncOptions) {
+function isAccountSaveForUser(save: VersionedGameSave, userId: string) {
+  return save.ownerType === 'account' && save.ownerUserId === userId;
+}
+
+function toAccountSave(save: VersionedGameSave, userId: string): VersionedGameSave {
+  return createVersionedSave(save.state, { ownerType: 'account', ownerUserId: userId });
+}
+
+export function useCloudSync({
+  user,
+  state,
+  canSyncState = true,
+  onApplyState,
+}: UseCloudSyncOptions) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local-only');
   const [hasResolvedInitialSync, setHasResolvedInitialSync] = useState(false);
   const hasCheckedCloudRef = useRef(false);
@@ -68,6 +81,7 @@ export function useCloudSync({ user, state, canSyncState = true, onApplyState }:
     let cancelled = false;
     const userId = user.id;
     const hydrationGeneration = hydrationGenerationRef.current;
+    hasCheckedCloudRef.current = false;
     setHasResolvedInitialSync(false);
 
     async function reconcileOnLogin() {
@@ -79,41 +93,52 @@ export function useCloudSync({ user, state, canSyncState = true, onApplyState }:
         if (cancelled || hydrationGeneration !== hydrationGenerationRef.current) return;
 
         const latestLocal = loadLocalSave() ?? createVersionedSave(latestStateRef.current);
-        const local = latestLocal.updatedAt >= initialLocal.updatedAt ? latestLocal : initialLocal;
+        const local = chooseLastWrittenSave(initialLocal, latestLocal);
 
         if (!cloud) {
+          const accountSave = toAccountSave(local, userId);
           logSaveDebug('SAVE_WINNER_SELECTED', {
             source: 'local',
-            save: local,
+            save: accountSave,
             extra: {
               localUpdatedAt: local.updatedAt,
               cloudUpdatedAt: null,
+              selectionReason: 'no_cloud_save',
             },
           });
-          await saveCloud(userId, local.state);
-          lastSyncedStateRef.current = local.state;
+          saveVersionedLocal(accountSave);
+          onApplyState(accountSave.state, 'Save local conectado à conta.');
+          await saveCloud(userId, accountSave.state);
+          lastSyncedStateRef.current = accountSave.state;
           dirtyRef.current = false;
           clearPendingIndicator();
           setSyncStatus('synced');
           return;
         }
 
-        const selectedSave = chooseLastWrittenSave(local, cloud);
+        const localBelongsToAccount = isAccountSaveForUser(local, userId);
+        const selectedSave = localBelongsToAccount ? chooseLastWrittenSave(local, cloud) : cloud;
+        const selectedAccountSave = toAccountSave(selectedSave, userId);
         const selectedMessage =
-          selectedSave === local ? 'Save local mantido.' : 'Save da nuvem carregado.';
+          selectedSave === local && localBelongsToAccount
+            ? 'Save local mantido.'
+            : 'Save da nuvem carregado.';
         logSaveDebug('SAVE_WINNER_SELECTED', {
-          source: selectedSave === local ? 'local' : 'cloud',
-          save: selectedSave,
+          source: selectedSave === local && localBelongsToAccount ? 'local' : 'cloud',
+          save: selectedAccountSave,
           extra: {
             localUpdatedAt: local.updatedAt,
             cloudUpdatedAt: cloud.updatedAt,
+            localOwnerType: local.ownerType,
+            localOwnerUserId: local.ownerUserId ?? null,
+            selectionReason: localBelongsToAccount ? 'same_account_lww' : 'guest_vs_cloud_cloud_wins',
           },
         });
 
-        saveVersionedLocal(selectedSave);
-        onApplyState(selectedSave.state, selectedMessage);
-        await saveCloud(userId, selectedSave.state);
-        lastSyncedStateRef.current = selectedSave.state;
+        saveVersionedLocal(selectedAccountSave);
+        onApplyState(selectedAccountSave.state, selectedMessage);
+        await saveCloud(userId, selectedAccountSave.state);
+        lastSyncedStateRef.current = selectedAccountSave.state;
         dirtyRef.current = false;
         clearPendingIndicator();
         setSyncStatus('synced');
@@ -142,6 +167,7 @@ export function useCloudSync({ user, state, canSyncState = true, onApplyState }:
 
     const userId = user.id;
     const interval = window.setInterval(async () => {
+      if (!hasCheckedCloudRef.current) return;
       if (!canSyncStateRef.current) return;
       if (!dirtyRef.current) return;
 
@@ -166,6 +192,7 @@ export function useCloudSync({ user, state, canSyncState = true, onApplyState }:
     const userId = user.id;
 
     function syncBeforeUnload() {
+      if (!hasCheckedCloudRef.current) return;
       if (!canSyncStateRef.current) return;
       void saveCloud(userId, latestStateRef.current);
     }
@@ -179,6 +206,7 @@ export function useCloudSync({ user, state, canSyncState = true, onApplyState }:
     const userId = user.id;
 
     async function syncOnOnline() {
+      if (!hasCheckedCloudRef.current) return;
       if (!canSyncStateRef.current) return;
 
       try {
