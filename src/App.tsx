@@ -32,6 +32,11 @@ import { playSoundCue, unlockGameAudio } from './utils/sound';
 import { useCloudSync } from './persistence/useCloudSync';
 import { saveLocal } from './persistence/localSave';
 import { logSaveDebug } from './utils/saveDebug';
+import {
+  rewardedAdService,
+  type RewardedAdRequest,
+  type RewardedAdResult,
+} from './ads/rewardedAdService';
 
 function requestPortraitOrientationLock() {
   const orientation = screen.orientation as (ScreenOrientation & {
@@ -54,6 +59,9 @@ function App() {
   const [isInitialAuthSigningIn, setIsInitialAuthSigningIn] = useState(false);
   const [isCloudSavePromptOpen, setIsCloudSavePromptOpen] = useState(false);
   const [isCloudSavePromptSigningIn, setIsCloudSavePromptSigningIn] = useState(false);
+  const [isRewardedAdAvailable, setIsRewardedAdAvailable] = useState(false);
+  const [isRewardedAdPending, setIsRewardedAdPending] = useState(false);
+  const [rewardedAdRequest, setRewardedAdRequest] = useState<RewardedAdRequest | null>(null);
   const [isSellMode, setIsSellMode] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
@@ -79,6 +87,7 @@ function App() {
   const recentlyCollectedCreatureIds = useRef(new Set<string>());
   const hasCalculatedOfflineRewardRef = useRef(false);
   const shouldSaveOfflineCollectionRef = useRef(false);
+  const hasClaimedOfflineRewardRef = useRef(false);
 
   const creatureProductionPerSecond = getProductionPerSecond(model.state.creatures);
   const productionPerSecond = getTotalProductionPerSecond(model.state);
@@ -185,6 +194,24 @@ function App() {
     requestPortraitOrientationLock();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    rewardedAdService.isAvailable().then((available) => {
+      if (!cancelled) setIsRewardedAdAvailable(available);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    return rewardedAdService.subscribe((request) => {
+      setRewardedAdRequest(request);
+    });
+  }, []);
+
   function recordInteraction() {
     setLastInteractionAt(Date.now());
     setMergeTutorialPhase('idle');
@@ -213,12 +240,51 @@ function App() {
     }
   }
 
-  function handleOfflineRewardCollect() {
+  function handleOfflineRewardCollect(multiplier: 1 | 2 = 1, allowWhileRewardedAdPending = false) {
     if (!initial.offlineReward) return;
+    if (hasClaimedOfflineRewardRef.current) return;
+    if (isRewardedAdPending && !allowWhileRewardedAdPending) return;
 
+    hasClaimedOfflineRewardRef.current = true;
     shouldSaveOfflineCollectionRef.current = true;
-    dispatch({ type: 'collectOfflineReward', reward: initial.offlineReward });
+    dispatch({ type: 'collectOfflineReward', reward: initial.offlineReward, multiplier });
     initial.dismissOfflineReward();
+  }
+
+  async function handleRewardedOfflineReward() {
+    if (!initial.offlineReward || hasClaimedOfflineRewardRef.current || isRewardedAdPending) return;
+
+    setIsRewardedAdPending(true);
+
+    try {
+      const result = await rewardedAdService.showRewardedAd('offline_reward');
+
+      if (result === 'rewarded') {
+        handleOfflineRewardCollect(2, true);
+        return;
+      }
+
+      if (result === 'unavailable') {
+        setIsRewardedAdAvailable(false);
+      }
+
+      dispatch({
+        type: 'showToast',
+        message:
+          result === 'closed'
+            ? 'Anúncio fechado. Recompensa normal mantida.'
+            : 'Anúncio indisponível. Recompensa normal mantida.',
+      });
+    } finally {
+      setIsRewardedAdPending(false);
+    }
+  }
+
+  function resolveRewardedAdRequest(result: RewardedAdResult) {
+    if (!rewardedAdRequest) return;
+
+    rewardedAdService.resolveRequest(rewardedAdRequest.id, result);
+    setRewardedAdRequest(null);
   }
 
   const collectCreatureCoins = useCallback(
@@ -1123,8 +1189,49 @@ function App() {
       {initial.offlineReward ? (
         <OfflineRewardModal
           reward={initial.offlineReward}
-          onCollect={handleOfflineRewardCollect}
+          isRewardedAdAvailable={isRewardedAdAvailable}
+          isPending={isRewardedAdPending || hasClaimedOfflineRewardRef.current}
+          onCollect={() => handleOfflineRewardCollect(1)}
+          onCollectDouble={handleRewardedOfflineReward}
         />
+      ) : null}
+
+      {rewardedAdRequest ? (
+        <div className="modalBackdrop" role="presentation">
+          <section
+            className="modal rewardedAdDevModal compactConfirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rewarded-ad-dev-title"
+          >
+            <p className="modal__eyebrow">DEV</p>
+            <h2 id="rewarded-ad-dev-title">Simulação de anúncio recompensado</h2>
+            <p>Placement: {rewardedAdRequest.placement}</p>
+            <div className="rewardedAdDevModal__actions">
+              <button
+                className="primaryButton"
+                type="button"
+                onClick={() => resolveRewardedAdRequest('rewarded')}
+              >
+                Simular anúncio concluído
+              </button>
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={() => resolveRewardedAdRequest('closed')}
+              >
+                Simular fechamento
+              </button>
+              <button
+                className="dangerButton"
+                type="button"
+                onClick={() => resolveRewardedAdRequest('failed')}
+              >
+                Simular falha
+              </button>
+            </div>
+          </section>
+        </div>
       ) : null}
     </main>
   );

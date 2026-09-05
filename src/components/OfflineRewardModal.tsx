@@ -1,10 +1,13 @@
-import { Coins } from 'lucide-react';
+import { Coins, Play } from 'lucide-react';
 import type { OfflineReward } from '../types/game';
 import { formatCoins } from '../utils/economy';
 
 interface OfflineRewardModalProps {
   reward: OfflineReward;
+  isRewardedAdAvailable: boolean;
+  isPending: boolean;
   onCollect: () => void;
+  onCollectDouble: () => void;
 }
 
 function formatOfflineDuration(secondsAway: number) {
@@ -23,22 +26,48 @@ function formatOfflineDuration(secondsAway: number) {
   return `${seconds}s`;
 }
 
-export function OfflineRewardModal({ reward, onCollect }: OfflineRewardModalProps) {
+export function OfflineRewardModal({
+  reward,
+  isRewardedAdAvailable,
+  isPending,
+  onCollect,
+  onCollectDouble,
+}: OfflineRewardModalProps) {
+  const doubledCoins = reward.coins * 2;
+
   return (
     <div className="modalBackdrop" role="presentation">
       <section className="modal offline" role="dialog" aria-modal="true" aria-label="Recompensa offline">
-        <p className="modal__eyebrow">Enquanto você esteve fora...</p>
+        <p className="modal__eyebrow">Produção offline</p>
         <h2>
           <Coins size={24} aria-hidden="true" />
           +{formatCoins(reward.coins)}
         </h2>
-        <p>Suas anomalias produziram por {formatOfflineDuration(reward.secondsAway)}.</p>
+        <p>
+          Suas anomalias produziram enquanto você esteve fora por{' '}
+          {formatOfflineDuration(reward.secondsAway)}.
+        </p>
         {reward.capReached ? (
           <p className="offline__cap">Limite de produção offline atingido.</p>
         ) : null}
-        <button className="primaryButton" type="button" onClick={onCollect}>
-          Coletar
-        </button>
+        <div className="offline__actions">
+          <button className="secondaryButton" type="button" disabled={isPending} onClick={onCollect}>
+            Coletar {formatCoins(reward.coins)}
+          </button>
+          <button
+            className="primaryButton offline__rewardedButton"
+            type="button"
+            disabled={isPending || !isRewardedAdAvailable}
+            onClick={onCollectDouble}
+          >
+            <Play size={16} aria-hidden="true" />
+            {isPending
+              ? 'Processando...'
+              : isRewardedAdAvailable
+                ? `2x - Receber ${formatCoins(doubledCoins)}`
+                : '2x indisponível'}
+          </button>
+        </div>
       </section>
     </div>
   );

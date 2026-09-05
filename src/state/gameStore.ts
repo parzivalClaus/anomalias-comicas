@@ -54,7 +54,7 @@ export type GameAction =
   | { type: 'replaceState'; state: GameState; toast?: string }
   | { type: 'showToast'; message: string }
   | { type: 'clearToast' }
-  | { type: 'collectOfflineReward'; reward: OfflineReward }
+  | { type: 'collectOfflineReward'; reward: OfflineReward; multiplier: 1 | 2 }
   | { type: 'collectCreatureCoins'; instanceId: string }
   | { type: 'tick'; elapsedSeconds: number }
   | { type: 'dismissWelcome' }
@@ -563,9 +563,10 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
 
     case 'collectOfflineReward': {
       const now = Date.now();
+      const creditedCoins = action.reward.coins * action.multiplier;
       const nextState = {
         ...model.state,
-        coins: model.state.coins + action.reward.coins,
+        coins: model.state.coins + creditedCoins,
         lastSavedAt: now,
       };
 
@@ -574,6 +575,8 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         state: nextState,
         extra: {
           rewardCoins: action.reward.coins,
+          multiplier: action.multiplier,
+          creditedCoins,
           secondsAway: action.reward.secondsAway,
           capReached: action.reward.capReached,
         },

@@ -1542,6 +1542,34 @@ button {
   font-weight: 900;
 }
 
+.offline__actions,
+.rewardedAdDevModal__actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.offline__actions .primaryButton,
+.offline__actions .secondaryButton,
+.rewardedAdDevModal__actions .primaryButton {
+  margin-top: 0;
+}
+
+.offline__rewardedButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  background: linear-gradient(180deg, #ffec80, #f5a823);
+  color: #1d1204;
+  text-shadow: 0 1px 0 rgba(255, 247, 188, 0.9);
+}
+
+.rewardedAdDevModal p:not(.modal__eyebrow) {
+  color: rgba(247, 251, 255, 0.78);
+  font-weight: 800;
+}
+
 .welcomeModal {
   text-align: center;
 }
