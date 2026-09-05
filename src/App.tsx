@@ -33,6 +33,18 @@ import { useCloudSync } from './persistence/useCloudSync';
 import { saveLocal } from './persistence/localSave';
 import { logSaveDebug } from './utils/saveDebug';
 
+function requestPortraitOrientationLock() {
+  const orientation = screen.orientation as (ScreenOrientation & {
+    lock?: (orientation: 'portrait') => Promise<void>;
+  }) | undefined;
+  const lock = orientation?.lock;
+  if (!lock) return;
+
+  void lock.call(orientation, 'portrait').catch(() => {
+    // Browsers may reject orientation lock outside installed/fullscreen contexts.
+  });
+}
+
 function App() {
   const initial = useInitialGameModel();
   const [model, dispatch] = useReducer(reducer, initial.model);
@@ -168,6 +180,10 @@ function App() {
 
     playSoundCue(model.soundCue.type);
   }, [model.soundCue]);
+
+  useEffect(() => {
+    requestPortraitOrientationLock();
+  }, []);
 
   function recordInteraction() {
     setLastInteractionAt(Date.now());
@@ -701,6 +717,7 @@ function App() {
     <main
       className="appShell"
       onPointerDownCapture={() => {
+        requestPortraitOrientationLock();
         unlockGameAudio();
         recordInteraction();
       }}
