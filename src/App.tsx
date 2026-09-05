@@ -1,230 +1,96 @@
-import { Cloud, RotateCcw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import cosmicEggImage from './assets/ui/ovo-cosmico.png';
-import { AccountButton } from './components/AccountButton';
-// import { AnomalyShop } from './components/AnomalyShop';
-import { BuyCreatureButton } from './components/BuyCreatureButton';
-import { CoinHud } from './components/CoinHud';
-import { Dex } from './components/Dex';
-import { DiscoveryModal } from './components/DiscoveryModal';
-import { EggTimer } from './components/EggTimer';
-import { GameBoard } from './components/GameBoard';
-import { OfflineRewardModal } from './components/OfflineRewardModal';
-import { useAuth } from './auth/AuthProvider';
-import { signInWithGoogle } from './auth/authService';
-import { creatureDefinitions, dexOrder } from './data/creatures';
-import { gameConfig } from './data/gameConfig';
-import { useGameLoop } from './hooks/useGameLoop';
-import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
-import { calculateOfflineReward, reducer, type DragState } from './state/gameStore';
-import type { CreatureInstance, EggState, EnvironmentId } from './types/game';
-import {
-  formatCoins,
-  getEggPurchasePrice,
-  getProductionPerSecond,
-  getSellValue,
-  getTotalProductionPerSecond,
-} from './utils/economy';
-import { evaluateEnvironmentalTransformation } from './utils/environmentalTransform';
-import { findEnvironmentalHint, findMergeTutorialHint } from './utils/hints';
-import { evaluateMerge } from './utils/merge';
-import { playSoundCue, unlockGameAudio } from './utils/sound';
-import { useCloudSync } from './persistence/useCloudSync';
-import { saveLocal } from './persistence/localSave';
-import { logSaveDebug } from './utils/saveDebug';
-import {
-  rewardedAdService,
-} from './ads/rewardedAdService';
-import { evolutionRecipes } from './data/evolutions';
-
-const boardBackgrounds = {
-  dormant: '/backgrounds/game-board.png',
-  cracked: '/backgrounds/game-board-portal-cracked.png',
-  active: '/backgrounds/game-board-portal-open.png',
-} as const;
-
-function requestPortraitOrientationLock() {
-  const orientation = screen.orientation as (ScreenOrientation & {
-    lock?: (orientation: 'portrait') => Promise<void>;
-  }) | undefined;
-  const lock = orientation?.lock;
-  if (!lock) return;
-
-  void lock.call(orientation, 'portrait').catch(() => {
-    // Browsers may reject orientation lock outside installed/fullscreen contexts.
-  });
-}
-
-function preloadImage(src: string) {
-  const image = new Image();
-  image.decoding = 'async';
-  image.src = src;
-}
+import { RotateCcw } from "lucide-react";
+import { useEffect, useReducer, useState } from "react";
+import { AccountButton } from "./components/AccountButton";
+import { AnomalyShop } from "./components/AnomalyShop";
+import { BuyCreatureButton } from "./components/BuyCreatureButton";
+import { CoinHud } from "./components/CoinHud";
+import { Dex } from "./components/Dex";
+import { DiscoveryModal } from "./components/DiscoveryModal";
+import { EggTimer } from "./components/EggTimer";
+import { GameBoard } from "./components/GameBoard";
+import { OfflineRewardModal } from "./components/OfflineRewardModal";
+import { useAuth } from "./auth/AuthProvider";
+import { creatureDefinitions, dexOrder } from "./data/creatures";
+import { gameConfig } from "./data/gameConfig";
+import { useGameLoop } from "./hooks/useGameLoop";
+import { useAutosave, useInitialGameModel } from "./hooks/useGamePersistence";
+import { reducer, type DragState } from "./state/gameStore";
+import type { CreatureInstance, EnvironmentId } from "./types/game";
+import { getProductionPerSecond } from "./utils/economy";
+import { evaluateEnvironmentalTransformation } from "./utils/environmentalTransform";
+import { findEnvironmentalHint, findMergeTutorialHint } from "./utils/hints";
+import { evaluateMerge } from "./utils/merge";
+import { playSoundCue, unlockGameAudio } from "./utils/sound";
+import { useCloudSync } from "./persistence/useCloudSync";
 
 function App() {
   const initial = useInitialGameModel();
   const [model, dispatch] = useReducer(reducer, initial.model);
   const [dragState, setDragState] = useState<DragState>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
-  const [hasChosenGuestSession, setHasChosenGuestSession] = useState(false);
-  const [isInitialAuthSigningIn, setIsInitialAuthSigningIn] = useState(false);
-  const [isCloudSavePromptOpen, setIsCloudSavePromptOpen] = useState(false);
-  const [isCloudSavePromptSigningIn, setIsCloudSavePromptSigningIn] = useState(false);
-  const [isRewardedAdAvailable, setIsRewardedAdAvailable] = useState(false);
-  const [isRewardedAdPending, setIsRewardedAdPending] = useState(false);
-  const [rewardedAdMessage, setRewardedAdMessage] = useState<string | null>(null);
-  const [isSellMode, setIsSellMode] = useState(false);
+  const [isShopOpen, setIsShopOpen] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
-  const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
-  const [pendingSacrifice, setPendingSacrifice] = useState<CreatureInstance | null>(null);
-  const [isMapPreviewOpen, setIsMapPreviewOpen] = useState(false);
   const [isPortalReacting, setIsPortalReacting] = useState(false);
   const [lastInteractionAt, setLastInteractionAt] = useState(Date.now());
-  const [mergeTutorialPhase, setMergeTutorialPhase] = useState<'idle' | 'pulse' | 'gesture'>(
-    'idle',
-  );
-  const [environmentalHintInstanceIds, setEnvironmentalHintInstanceIds] = useState<string[]>([]);
+  const [mergeTutorialPhase, setMergeTutorialPhase] = useState<
+    "idle" | "pulse" | "gesture"
+  >("idle");
+  const [environmentalHintInstanceIds, setEnvironmentalHintInstanceIds] =
+    useState<string[]>([]);
   const [isEnvironmentReacting, setIsEnvironmentReacting] = useState(false);
-  const [visibleDiscoveryId, setVisibleDiscoveryId] = useState(model.latestDiscoveryId);
+  const [visibleDiscoveryId, setVisibleDiscoveryId] = useState(
+    model.latestDiscoveryId,
+  );
   const [mergeBurst, setMergeBurst] = useState<{
     id: number;
     x: number;
     y: number;
     isDiscovery: boolean;
   } | null>(null);
-  const [collectionBursts, setCollectionBursts] = useState<
-    Record<string, { id: number; amount: number }>
-  >({});
-  const recentlyCollectedCreatureIds = useRef(new Set<string>());
-  const hasCalculatedOfflineRewardRef = useRef(false);
-  const shouldSaveOfflineCollectionRef = useRef(false);
-  const hasClaimedOfflineRewardRef = useRef(false);
 
-  const creatureProductionPerSecond = getProductionPerSecond(model.state.creatures);
-  const productionPerSecond = getTotalProductionPerSecond(model.state);
+  const productionPerSecond = getProductionPerSecond(model.state.creatures);
   const occupiedSlots = model.state.creatures.length + model.state.eggs.length;
   const isBoardFull = occupiedSlots >= gameConfig.boardSlots;
-  const eggPrice = getEggPurchasePrice(model.state);
-  const canBuyEgg = !isBoardFull && model.state.coins >= eggPrice;
-  const eggTimerSeconds = model.state.remainingEggSpawnSeconds;
+  const nextEggToHatch = model.state.eggs.reduce<number | null>(
+    (lowestSeconds, egg) =>
+      lowestSeconds === null
+        ? egg.remainingIncubationSeconds
+        : Math.min(lowestSeconds, egg.remainingIncubationSeconds),
+    null,
+  );
+  const eggTimerSeconds =
+    nextEggToHatch ?? model.state.remainingEggSpawnSeconds;
   const mergeTutorialHint = model.state.hasCompletedFirstMergeTutorial
     ? null
     : findMergeTutorialHint(model.state.creatures);
   const mergeHintInstanceIds =
-    mergeTutorialHint && mergeTutorialPhase !== 'idle'
+    mergeTutorialHint && mergeTutorialPhase !== "idle"
       ? [mergeTutorialHint.sourceInstanceId, mergeTutorialHint.targetInstanceId]
       : [];
   const mergeGestureHint =
-    mergeTutorialHint && mergeTutorialPhase === 'gesture'
+    mergeTutorialHint && mergeTutorialPhase === "gesture"
       ? {
           sourceSlotIndex: mergeTutorialHint.sourceSlotIndex,
           targetSlotIndex: mergeTutorialHint.targetSlotIndex,
         }
       : null;
   const environmentalHintSignature = model.state.creatures
-    .map((creature) => `${creature.instanceId}:${creature.creatureId}:${creature.slotIndex}`)
+    .map(
+      (creature) =>
+        `${creature.instanceId}:${creature.creatureId}:${creature.slotIndex}`,
+    )
     .sort()
-    .join('|');
-  const portalProgress =
-    model.state.portalEnergyRequired > 0
-      ? Math.min(
-          100,
-          Math.round((model.state.portalEnergy / model.state.portalEnergyRequired) * 100),
-        )
-      : 0;
-  const boardBackground = boardBackgrounds[model.state.portalState];
-  const creatureCounts = model.state.creatures.reduce<Partial<Record<string, number>>>(
-    (counts, creature) => ({
-      ...counts,
-      [creature.creatureId]: (counts[creature.creatureId] ?? 0) + 1,
-    }),
-    {},
-  );
-  const preloadCandidateImages = new Set<string>();
-
-  if (
-    model.state.portalState === 'dormant' &&
-    (model.state.discoveredCreatureIds.includes('nebulux') ||
-      model.state.creatures.some((creature) => creature.creatureId === 'nebulux'))
-  ) {
-    preloadCandidateImages.add(boardBackgrounds.cracked);
-  }
-
-  if (model.state.portalState === 'cracked' && portalProgress >= 80) {
-    preloadCandidateImages.add(boardBackgrounds.active);
-  }
-
-  for (const recipe of evolutionRecipes) {
-    const [firstInput, secondInput] = recipe.inputs;
-    const hasImmediateMerge =
-      firstInput === secondInput
-        ? (creatureCounts[firstInput] ?? 0) >= 2
-        : (creatureCounts[firstInput] ?? 0) >= 1 && (creatureCounts[secondInput] ?? 0) >= 1;
-
-    if (hasImmediateMerge) {
-      preloadCandidateImages.add(creatureDefinitions[recipe.result].image);
-    }
-  }
-  const pendingSaleDefinition = pendingSale ? creatureDefinitions[pendingSale.creatureId] : null;
-  const pendingSaleValue = pendingSale ? getSellValue(pendingSale.creatureId) : 0;
-  const pendingSacrificeDefinition = pendingSacrifice
-    ? creatureDefinitions[pendingSacrifice.creatureId]
-    : null;
-  const pendingSacrificeEnergy = pendingSacrificeDefinition?.portalEnergyValue ?? 0;
-  const pendingSacrificeProductionLoss = pendingSacrificeDefinition?.coinsPerSecond ?? 0;
-  const pendingSacrificeProductionAfter = Math.max(
-    0,
-    productionPerSecond - pendingSacrificeProductionLoss,
-  );
-  const pendingSacrificeCreatureProductionAfter = pendingSacrifice
-    ? Math.max(0, creatureProductionPerSecond - pendingSacrificeProductionLoss)
-    : creatureProductionPerSecond;
-  const pendingSacrificeLossPercent =
-    productionPerSecond > 0
-      ? (pendingSacrificeProductionLoss / productionPerSecond) * 100
-      : 0;
-  const { user, isConfigured, isLoading: isAuthLoading } = useAuth();
-  const { syncStatus, hasResolvedInitialSync } = useCloudSync({
+    .join("|");
+  const { user } = useAuth();
+  const { syncStatus } = useCloudSync({
     user,
     state: model.state,
-    canSyncState: !initial.offlineReward,
-    onApplyState: (state, message) => dispatch({ type: 'replaceState', state, toast: message }),
+    onApplyState: (state, message) =>
+      dispatch({ type: "replaceState", state, toast: message }),
   });
-  const saveOwner = user
-    ? ({ ownerType: 'account', ownerUserId: user.id } as const)
-    : ({ ownerType: 'guest' } as const);
-  const shouldShowInitialAuthPrompt =
-    isConfigured && !isAuthLoading && !user && !hasChosenGuestSession;
-  const isHydrating = isAuthLoading || Boolean(user && !hasResolvedInitialSync);
-  const isGameplayLocked = isHydrating || shouldShowInitialAuthPrompt || isInitialAuthSigningIn;
-  const preloadCandidateSignature = [...preloadCandidateImages].sort().join('|');
-  const hasPlayedEnoughForCloudPrompt =
-    model.state.hasCompletedFirstMergeTutorial ||
-    model.state.discoveredCreatureIds.length >= 2 ||
-    model.state.highestIncomePerSecond >= 2;
-  const canShowCloudSavePrompt =
-    isConfigured &&
-    !user &&
-    !isAuthLoading &&
-    !isGameplayLocked &&
-    model.state.hasSeenWelcomeModal &&
-    !model.state.hasSeenCloudSavePrompt &&
-    hasPlayedEnoughForCloudPrompt;
-  const hasBlockingModal =
-    isDexOpen ||
-    isResetConfirmOpen ||
-    Boolean(pendingSale) ||
-    Boolean(pendingSacrifice) ||
-    isMapPreviewOpen ||
-    Boolean(visibleDiscoveryId) ||
-    Boolean(initial.offlineReward);
 
-  useGameLoop(dispatch, !isGameplayLocked);
-  useAutosave(
-    model.state,
-    !isGameplayLocked && hasResolvedInitialSync && !initial.offlineReward,
-    saveOwner,
-  );
+  useGameLoop(dispatch);
+  useAutosave(model.state);
 
   useEffect(() => {
     if (!model.soundCue) return;
@@ -232,158 +98,18 @@ function App() {
     playSoundCue(model.soundCue.type);
   }, [model.soundCue]);
 
-  useEffect(() => {
-    requestPortraitOrientationLock();
-  }, []);
-
-  useEffect(() => {
-    if (isGameplayLocked || !preloadCandidateSignature) return;
-
-    const sources = preloadCandidateSignature.split('|');
-    const preload = () => sources.forEach(preloadImage);
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-
-    if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
-      const idleId = idleWindow.requestIdleCallback(preload, { timeout: 4000 });
-      return () => idleWindow.cancelIdleCallback?.(idleId);
-    }
-
-    const timeout = window.setTimeout(preload, 1400);
-    return () => window.clearTimeout(timeout);
-  }, [isGameplayLocked, preloadCandidateSignature]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    rewardedAdService.isAvailable().then((available) => {
-      if (!cancelled) setIsRewardedAdAvailable(available);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   function recordInteraction() {
     setLastInteractionAt(Date.now());
-    setMergeTutorialPhase('idle');
+    setMergeTutorialPhase("idle");
   }
-
-  async function handleCloudPromptSignIn() {
-    setIsCloudSavePromptSigningIn(true);
-    dispatch({ type: 'dismissCloudSavePrompt' });
-
-    try {
-      await signInWithGoogle();
-    } catch {
-      setIsCloudSavePromptSigningIn(false);
-      dispatch({ type: 'showToast', message: 'Não foi possível abrir o login.' });
-    }
-  }
-
-  async function handleInitialAuthSignIn() {
-    setIsInitialAuthSigningIn(true);
-
-    try {
-      await signInWithGoogle();
-    } catch {
-      setIsInitialAuthSigningIn(false);
-      dispatch({ type: 'showToast', message: 'Não foi possível abrir o login.' });
-    }
-  }
-
-  function handleOfflineRewardCollect(multiplier: 1 | 2 = 1, allowWhileRewardedAdPending = false) {
-    if (!initial.offlineReward) return;
-    if (hasClaimedOfflineRewardRef.current) return;
-    if (isRewardedAdPending && !allowWhileRewardedAdPending) return;
-
-    setRewardedAdMessage(null);
-    hasClaimedOfflineRewardRef.current = true;
-    shouldSaveOfflineCollectionRef.current = true;
-    dispatch({ type: 'collectOfflineReward', reward: initial.offlineReward, multiplier });
-    initial.dismissOfflineReward();
-  }
-
-  async function handleRewardedOfflineReward() {
-    if (!initial.offlineReward || hasClaimedOfflineRewardRef.current || isRewardedAdPending) return;
-
-    setIsRewardedAdPending(true);
-    setRewardedAdMessage(null);
-
-    try {
-      const result = await rewardedAdService.showRewardedAd('offline_reward');
-
-      if (result === 'rewarded') {
-        handleOfflineRewardCollect(2, true);
-        return;
-      }
-
-      if (result === 'unavailable') {
-        setIsRewardedAdAvailable(false);
-      }
-
-      setRewardedAdMessage(
-        result === 'closed'
-          ? 'Anúncio fechado. Você ainda pode coletar a recompensa normal.'
-          : 'Não foi possível carregar o anúncio. Você ainda pode coletar a recompensa normal.',
-      );
-    } finally {
-      setIsRewardedAdPending(false);
-    }
-  }
-
-  const collectCreatureCoins = useCallback(
-    (instanceId: string) => {
-      if (recentlyCollectedCreatureIds.current.has(instanceId)) return;
-
-      const creature = model.state.creatures.find((item) => item.instanceId === instanceId);
-      const amount = Math.floor(creature?.pendingCoins ?? 0);
-
-      if (!creature || amount <= 0) return;
-
-      recentlyCollectedCreatureIds.current.add(instanceId);
-      window.setTimeout(() => {
-        recentlyCollectedCreatureIds.current.delete(instanceId);
-      }, 120);
-
-      const burstId = Date.now() + creature.birthId;
-      setCollectionBursts((current) => ({
-        ...current,
-        [instanceId]: { id: burstId, amount },
-      }));
-      window.setTimeout(() => {
-        setCollectionBursts((current) => {
-          if (current[instanceId]?.id !== burstId) return current;
-          const next = { ...current };
-          delete next[instanceId];
-          return next;
-        });
-      }, 780);
-
-      dispatch({ type: 'collectCreatureCoins', instanceId });
-    },
-    [model.state.creatures],
-  );
 
   function handleCreaturePointerDown(
     creature: CreatureInstance,
     event: React.PointerEvent<HTMLButtonElement>,
   ) {
     recordInteraction();
-
-    if (isSellMode) {
-      event.preventDefault();
-      setPendingSale(creature);
-      return;
-    }
-
-    collectCreatureCoins(creature.instanceId);
-
     setDragState({
-      kind: 'creature',
+      kind: "creature",
       instanceId: creature.instanceId,
       fromSlotIndex: creature.slotIndex,
       pointerX: event.clientX,
@@ -391,10 +117,13 @@ function App() {
     });
   }
 
-  function handleEggPointerDown(egg: EggState, event: React.PointerEvent<HTMLButtonElement>) {
+  function handleEggPointerDown(
+    egg: { eggId: string; slotIndex: number },
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) {
     recordInteraction();
     setDragState({
-      kind: 'egg',
+      kind: "egg",
       instanceId: egg.eggId,
       fromSlotIndex: egg.slotIndex,
       pointerX: event.clientX,
@@ -402,59 +131,58 @@ function App() {
     });
   }
 
-  function handleDropOnSlot(slotIndex: number, burstPoint?: { x: number; y: number }) {
+  function handleDropOnSlot(
+    slotIndex: number,
+    burstPoint?: { x: number; y: number },
+  ) {
     if (!dragState) return;
     recordInteraction();
 
-    const dragged =
-      dragState.kind === 'creature'
-        ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
-        : null;
-    const draggedEgg =
-      dragState.kind === 'egg'
-        ? model.state.eggs.find((egg) => egg.eggId === dragState.instanceId)
-        : null;
-    const target = model.state.creatures.find((creature) => creature.slotIndex === slotIndex);
-    const targetEgg = model.state.eggs.find((egg) => egg.slotIndex === slotIndex);
-
-    setDragState(null);
-
-    if (draggedEgg) {
-      if (draggedEgg.slotIndex === slotIndex) return;
-
-      if (!target && !targetEgg) {
-        dispatch({ type: 'moveEgg', eggId: draggedEgg.eggId, toSlotIndex: slotIndex });
+    if (dragState.kind === "egg") {
+      const draggedEgg = model.state.eggs.find((egg) => egg.eggId === dragState.instanceId);
+      if (!draggedEgg || draggedEgg.slotIndex === slotIndex) {
+        setDragState(null);
         return;
       }
-
+      const targetEgg = model.state.eggs.find((egg) => egg.slotIndex === slotIndex);
+      const targetCreature = model.state.creatures.find((creature) => creature.slotIndex === slotIndex);
+      setDragState(null);
       if (targetEgg) {
-        dispatch({ type: 'swapEggs', sourceEggId: draggedEgg.eggId, targetEggId: targetEgg.eggId });
-        return;
+        dispatch({ type: "swapEggs", sourceEggId: draggedEgg.eggId, targetEggId: targetEgg.eggId });
+      } else if (targetCreature) {
+        dispatch({ type: "swapCreatureWithEgg", creatureInstanceId: targetCreature.instanceId, eggId: draggedEgg.eggId });
+      } else {
+        dispatch({ type: "moveEgg", eggId: draggedEgg.eggId, toSlotIndex: slotIndex });
       }
-
-      if (target) {
-        dispatch({
-          type: 'swapCreatureWithEgg',
-          creatureInstanceId: target.instanceId,
-          eggId: draggedEgg.eggId,
-        });
-      }
-
       return;
     }
 
+    const dragged = model.state.creatures.find(
+      (creature) => creature.instanceId === dragState.instanceId,
+    );
+    const target = model.state.creatures.find(
+      (creature) => creature.slotIndex === slotIndex,
+    );
+    const targetEgg = model.state.eggs.find(
+      (egg) => egg.slotIndex === slotIndex,
+    );
+
+    setDragState(null);
     if (!dragged || dragged.slotIndex === slotIndex) return;
 
     if (!target && !targetEgg) {
-      dispatch({ type: 'move', instanceId: dragged.instanceId, toSlotIndex: slotIndex });
+      dispatch({
+        type: "move",
+        instanceId: dragged.instanceId,
+        toSlotIndex: slotIndex,
+      });
       return;
     }
 
     if (targetEgg) {
       dispatch({
-        type: 'swapCreatureWithEgg',
-        creatureInstanceId: dragged.instanceId,
-        eggId: targetEgg.eggId,
+        type: "blockedMerge",
+        message: "O ovo ainda esta incubando.",
       });
       return;
     }
@@ -462,8 +190,10 @@ function App() {
     if (!target) return;
 
     const merge = evaluateMerge(dragged, target);
-    if (merge.status === 'success') {
-      const isDiscovery = !model.state.discoveredCreatureIds.includes(merge.resultCreatureId);
+    if (merge.status === "success") {
+      const isDiscovery = !model.state.discoveredCreatureIds.includes(
+        merge.resultCreatureId,
+      );
 
       if (burstPoint) {
         setMergeBurst({
@@ -475,7 +205,7 @@ function App() {
       }
 
       dispatch({
-        type: 'merge',
+        type: "merge",
         sourceInstanceId: dragged.instanceId,
         targetInstanceId: target.instanceId,
         resultCreatureId: merge.resultCreatureId,
@@ -484,13 +214,13 @@ function App() {
       return;
     }
 
-    if (merge.status === 'blocked') {
-      dispatch({ type: 'blockedMerge', message: merge.message });
+    if (merge.status === "blocked") {
+      dispatch({ type: "blockedMerge", message: merge.message });
       return;
     }
 
     dispatch({
-      type: 'swap',
+      type: "swap",
       sourceInstanceId: dragged.instanceId,
       targetInstanceId: target.instanceId,
     });
@@ -500,18 +230,6 @@ function App() {
     if (!dragState) return;
 
     recordInteraction();
-    if (environmentId === 'portal' && model.state.portalState === 'active') {
-      setDragState(null);
-      dispatch({ type: 'showToast', message: 'O portal já está ativo.' });
-      return;
-    }
-
-    if (dragState.kind !== 'creature') {
-      setDragState(null);
-      dispatch({ type: 'showToast', message: 'Nada respondeu.' });
-      return;
-    }
-
     const dragged = model.state.creatures.find(
       (creature) => creature.instanceId === dragState.instanceId,
     );
@@ -519,35 +237,17 @@ function App() {
     setDragState(null);
     if (!dragged) return;
 
-    const transformation = evaluateEnvironmentalTransformation(dragged, environmentId);
-    if (transformation.status !== 'success') {
-      if (model.state.portalState === 'cracked') {
-        const definition = creatureDefinitions[dragged.creatureId];
-        const totalProductionAfter = Math.max(0, productionPerSecond - definition.coinsPerSecond);
-        const creatureProductionAfter = Math.max(
-          0,
-          creatureProductionPerSecond - definition.coinsPerSecond,
-        );
-        const lossPercent =
-          productionPerSecond > 0 ? (definition.coinsPerSecond / productionPerSecond) * 100 : 0;
-        const shouldWarn =
-          creatureProductionAfter === 0 ||
-          totalProductionAfter <= gameConfig.criticalProductionPerSecond ||
-          lossPercent >= gameConfig.portalSacrificeWarningPercent;
-
-        if (shouldWarn) {
-          setPendingSacrifice(dragged);
-        } else {
-          dispatch({ type: 'sacrifice', instanceId: dragged.instanceId });
-        }
-      } else {
-        dispatch({ type: 'showToast', message: 'Nada respondeu.' });
-      }
+    const transformation = evaluateEnvironmentalTransformation(
+      dragged,
+      environmentId,
+    );
+    if (transformation.status !== "success") {
+      dispatch({ type: "showToast", message: "Nada respondeu." });
       return;
     }
 
     dispatch({
-      type: 'environmentalTransform',
+      type: "environmentalTransform",
       sourceInstanceId: dragged.instanceId,
       environmentId,
       resultCreatureId: transformation.resultCreatureId,
@@ -572,16 +272,18 @@ function App() {
     function handleWindowPointerUp(event: PointerEvent) {
       const elements = document.elementsFromPoint(event.clientX, event.clientY);
       const environment = elements
-        .map((element) => element.closest<HTMLElement>('[data-environment-id]'))
+        .map((element) => element.closest<HTMLElement>("[data-environment-id]"))
         .find(Boolean);
 
       if (environment?.dataset.environmentId) {
-        handleDropOnEnvironment(environment.dataset.environmentId as EnvironmentId);
+        handleDropOnEnvironment(
+          environment.dataset.environmentId as EnvironmentId,
+        );
         return;
       }
 
       const slot = elements
-        .map((element) => element.closest<HTMLElement>('[data-slot-index]'))
+        .map((element) => element.closest<HTMLElement>("[data-slot-index]"))
         .find(Boolean);
 
       if (!slot?.dataset.slotIndex) {
@@ -597,33 +299,21 @@ function App() {
       });
     }
 
-    window.addEventListener('pointermove', handleWindowPointerMove);
-    window.addEventListener('pointerup', handleWindowPointerUp);
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerUp);
     return () => {
-      window.removeEventListener('pointermove', handleWindowPointerMove);
-      window.removeEventListener('pointerup', handleWindowPointerUp);
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
     };
-  }, [dragState, model.state.creatures, model.state.eggs, model.state.portalState]);
+  }, [dragState, model.state.creatures, model.state.eggs]);
 
-  useEffect(() => {
-    function handlePointerMove(event: PointerEvent) {
-      const creatureElement = document
-        .elementsFromPoint(event.clientX, event.clientY)
-        .map((element) => element.closest<HTMLElement>('[data-creature-instance-id]'))
-        .find(Boolean);
-
-      const instanceId = creatureElement?.dataset.creatureInstanceId;
-      if (instanceId) collectCreatureCoins(instanceId);
-    }
-
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    return () => window.removeEventListener('pointermove', handlePointerMove);
-  }, [collectCreatureCoins]);
-
-  const draggedCreature = dragState?.kind === 'creature'
-    ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
+  const draggedCreature = dragState
+    ? dragState.kind === "creature" ? model.state.creatures.find(
+        (creature) => creature.instanceId === dragState.instanceId,
+      ) : null
     : null;
-  const draggedEgg = dragState?.kind === 'egg'
+
+  const draggedEgg = dragState?.kind === "egg"
     ? model.state.eggs.find((egg) => egg.eggId === dragState.instanceId)
     : null;
 
@@ -640,7 +330,7 @@ function App() {
 
     if (!model.latestDiscoveryId) return;
 
-    const delay = model.latestDiscoveryId === 'umbrelume' ? 1850 : 850;
+    const delay = model.latestDiscoveryId === "umbrelume" ? 1850 : 850;
     const timeout = window.setTimeout(() => {
       setVisibleDiscoveryId(model.latestDiscoveryId);
     }, delay);
@@ -656,78 +346,37 @@ function App() {
   }, [mergeBurst]);
 
   useEffect(() => {
+    if (isBoardFull) {
+      setIsShopOpen(false);
+    }
+  }, [isBoardFull]);
+
+  useEffect(() => {
     if (!model.toast) return;
 
-    const timeout = window.setTimeout(() => dispatch({ type: 'clearToast' }), 2600);
+    const timeout = window.setTimeout(
+      () => dispatch({ type: "clearToast" }),
+      2600,
+    );
     return () => window.clearTimeout(timeout);
   }, [model.toast]);
 
   useEffect(() => {
-    if (shouldSaveOfflineCollectionRef.current) {
-      shouldSaveOfflineCollectionRef.current = false;
-      saveLocal(model.state, saveOwner);
-    }
-  }, [model.state, saveOwner]);
-
-  useEffect(() => {
-    if (hasCalculatedOfflineRewardRef.current || isGameplayLocked || !hasResolvedInitialSync) return;
-
-    hasCalculatedOfflineRewardRef.current = true;
-    const reward = calculateOfflineReward(model.state);
-    logSaveDebug('OFFLINE_REWARD_CALCULATED', {
-      source: 'memory',
-      state: model.state,
-      coins: reward?.coins ?? 0,
-      extra: {
-        secondsAway: reward?.secondsAway ?? 0,
-        capReached: reward?.capReached ?? false,
-      },
-    });
-
-    if (reward) {
-      initial.showOfflineReward(reward);
-    }
-  }, [hasResolvedInitialSync, initial, isGameplayLocked, model.state]);
-
-  useEffect(() => {
-    if (!canShowCloudSavePrompt || hasBlockingModal || dragState || isCloudSavePromptOpen) {
-      return;
-    }
-
-    const promptDelay = Math.max(0, 5200 - (Date.now() - lastInteractionAt));
-    const timeout = window.setTimeout(() => {
-      setIsCloudSavePromptOpen(true);
-    }, promptDelay);
-
-    return () => window.clearTimeout(timeout);
-  }, [
-    canShowCloudSavePrompt,
-    dragState,
-    hasBlockingModal,
-    isCloudSavePromptOpen,
-    lastInteractionAt,
-  ]);
-
-  useEffect(() => {
-    if (user) {
-      setIsCloudSavePromptOpen(false);
-      setIsCloudSavePromptSigningIn(false);
-      setIsInitialAuthSigningIn(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!mergeTutorialHint || model.state.hasCompletedFirstMergeTutorial || dragState) {
-      setMergeTutorialPhase('idle');
+    if (
+      !mergeTutorialHint ||
+      model.state.hasCompletedFirstMergeTutorial ||
+      dragState
+    ) {
+      setMergeTutorialPhase("idle");
       return;
     }
 
     const pulseDelay = Math.max(0, 3200 - (Date.now() - lastInteractionAt));
     const pulseTimeout = window.setTimeout(() => {
-      setMergeTutorialPhase('pulse');
+      setMergeTutorialPhase("pulse");
     }, pulseDelay);
     const gestureTimeout = window.setTimeout(() => {
-      setMergeTutorialPhase('gesture');
+      setMergeTutorialPhase("gesture");
     }, pulseDelay + 3000);
 
     return () => {
@@ -751,13 +400,15 @@ function App() {
     let pauseTimeout: number | null = null;
 
     function schedulePulse() {
-      if (document.visibilityState !== 'visible') {
+      if (document.visibilityState !== "visible") {
         pulseTimeout = window.setTimeout(schedulePulse, 500);
         return;
       }
 
-      setEnvironmentalHintInstanceIds(activeHint.creatureInstanceIds.slice(0, 3));
-      setIsEnvironmentReacting(activeHint.environmentIds.includes('portal'));
+      setEnvironmentalHintInstanceIds(
+        activeHint.creatureInstanceIds.slice(0, 3),
+      );
+      setIsEnvironmentReacting(activeHint.environmentIds.includes("portal"));
       pauseTimeout = window.setTimeout(() => {
         setEnvironmentalHintInstanceIds([]);
         setIsEnvironmentReacting(false);
@@ -773,156 +424,68 @@ function App() {
     };
   }, [environmentalHintSignature]);
 
-  if (isHydrating || isInitialAuthSigningIn) {
-    return (
-      <main className="startupScreen" aria-busy="true">
-        <section className="startupPanel" aria-live="polite">
-          <p className="modal__eyebrow">Anomalias Cósmicas</p>
-          <h1>Anomalias Cósmicas</h1>
-          <span className="startupSpinner" aria-hidden="true" />
-          <p>Sincronizando...</p>
-        </section>
-      </main>
-    );
-  }
-
-  if (shouldShowInitialAuthPrompt) {
-    return (
-      <main className="startupScreen">
-        <section
-          className="modal cloudSavePrompt authStartPrompt"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="auth-start-title"
-        >
-          <span className="cloudSavePrompt__icon" aria-hidden="true">
-            <Cloud size={28} />
-          </span>
-          <p className="modal__eyebrow">Salvar progresso</p>
-          <h1 id="auth-start-title">Salve seu progresso</h1>
-          <p>
-            Entre com sua conta Google para manter suas anomalias sincronizadas entre
-            dispositivos.
-          </p>
-          <div className="cloudSavePrompt__actions">
-            <button
-              className="primaryButton"
-              type="button"
-              disabled={isInitialAuthSigningIn}
-              onClick={handleInitialAuthSignIn}
-            >
-              {isInitialAuthSigningIn ? 'Abrindo...' : 'Continuar com Google'}
-            </button>
-            <button
-              className="secondaryButton"
-              type="button"
-              disabled={isInitialAuthSigningIn}
-              onClick={() => setHasChosenGuestSession(true)}
-            >
-              Jogar sem conta
-            </button>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
   return (
     <main
       className="appShell"
       onPointerDownCapture={() => {
-        requestPortraitOrientationLock();
         unlockGameAudio();
         recordInteraction();
       }}
     >
       <div
         className={[
-          'gameStage',
-          `gameStage--portal-${model.state.portalState}`,
-          isPortalReacting ? 'gameStage--portalPulse' : '',
-          isEnvironmentReacting ? 'gameStage--environmentPulse' : '',
-        ].join(' ')}
-        style={
-          {
-            '--scene-background-image': `url("${boardBackground}")`,
-          } as React.CSSProperties
-        }
+          "gameStage",
+          isPortalReacting ? "gameStage--portalPulse" : "",
+          isEnvironmentReacting ? "gameStage--environmentPulse" : "",
+        ].join(" ")}
       >
-        <div className="sceneLayer" aria-hidden="true" />
+        <CoinHud
+          coins={model.state.coins}
+          productionPerSecond={productionPerSecond}
+        />
+        <AccountButton syncStatus={syncStatus} />
+        <EggTimer remainingSeconds={eggTimerSeconds} />
+        <div
+          className="portalDropZone"
+          data-environment-id="portal"
+          aria-hidden="true"
+        />
+        <div className="portalHint" aria-hidden="true" />
         <GameBoard
           creatures={model.state.creatures}
           eggs={model.state.eggs}
           dragState={dragState}
-          collectionBursts={collectionBursts}
+          collectionBursts={{}}
           mergeHintInstanceIds={mergeHintInstanceIds}
           environmentalHintInstanceIds={environmentalHintInstanceIds}
           mergeGestureHint={mergeGestureHint}
           onCreaturePointerDown={handleCreaturePointerDown}
-          onCollectCreature={collectCreatureCoins}
+          onCollectCreature={(instanceId) => dispatch({ type: "collectCreatureCoins", instanceId })}
           onEggPointerDown={handleEggPointerDown}
         />
-        <div className="hudLayer">
-        <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
-        <AccountButton syncStatus={syncStatus} />
-        <EggTimer remainingSeconds={eggTimerSeconds} />
-        <button
-          className="portalDropZone"
-          type="button"
-          data-environment-id="portal"
-          aria-label={model.state.portalState === 'active' ? 'Abrir Mapa 2' : 'Portal'}
-          onClick={() => {
-            if (model.state.portalState === 'active' && !dragState) {
-              setIsMapPreviewOpen(true);
-            }
-          }}
-        />
-        {model.state.portalState === 'dormant' ? (
-          <div className="portalHint" aria-hidden="true" />
+
+        {model.toast ? (
+          <p className="toast" role="status">
+            {model.toast}
+          </p>
         ) : null}
-        {model.state.portalState !== 'dormant' ? (
-          <div
-            className={`portalMeter ${
-              model.state.portalState === 'active' ? 'portalMeter--active' : ''
-            }`}
-            aria-label="Energia do portal"
-          >
-            {model.state.portalState === 'cracked' ? (
-              <span className="portalMeter__message">
-                O portal despertou... e parece faminto.
-              </span>
-            ) : null}
-            <p>
-              {model.state.portalState === 'active' ? <span>Portal ativo</span> : null}
-              <strong>
-                {model.state.portalState === 'active'
-                  ? 'Mapa 2'
-                  : `${model.state.portalEnergy}/${model.state.portalEnergyRequired}`}
-              </strong>
-            </p>
-            <i
-              style={
-                {
-                  '--portal-progress': `${
-                    model.state.portalState === 'active' ? 100 : portalProgress
-                  }%`,
-                } as React.CSSProperties
-              }
-            />
-          </div>
-        ) : null}
-        {model.toast ? <p className="toast" role="status">{model.toast}</p> : null}
 
         <div className="actionBar">
           <BuyCreatureButton
-            disabled={!canBuyEgg}
-            price={formatCoins(eggPrice)}
-            onBuy={() => dispatch({ type: 'buyEgg' })}
+            disabled={isBoardFull}
+            price={model.state.currentEggPrice.toLocaleString("pt-BR")}
+            onBuy={() => {
+              if (!isBoardFull) setIsShopOpen(true);
+            }}
           />
         </div>
 
         <aside className="sideActions" aria-label="Ações">
-          <button className="iconTile" type="button" onClick={() => setIsDexOpen(true)}>
+          <button
+            className="iconTile"
+            type="button"
+            onClick={() => setIsDexOpen(true)}
+          >
             <span className="iconTile__art iconTile__art--dex">
               <img src="/ui/dex.png" alt="" />
             </span>
@@ -931,21 +494,13 @@ function App() {
               {model.state.discoveredCreatureIds.length} / {dexOrder.length}
             </small>
           </button>
-          <button
-            className={`iconTile iconTile--sell ${isSellMode ? 'is-active' : ''}`}
-            type="button"
-            aria-pressed={isSellMode}
-            onClick={() => setIsSellMode((current) => !current)}
-          >
-            <span className="iconTile__symbol">
-              <Trash2 size={22} aria-hidden="true" />
-            </span>
-            <span>Vender</span>
-            <small>{isSellMode ? 'Ativo' : '15%'}</small>
-          </button>
         </aside>
 
-        <button className="resetButton" type="button" onClick={() => setIsResetConfirmOpen(true)}>
+        <button
+          className="resetButton"
+          type="button"
+          onClick={() => setIsResetConfirmOpen(true)}
+        >
           <RotateCcw size={15} aria-hidden="true" />
           Resetar save
         </button>
@@ -955,32 +510,24 @@ function App() {
             className="dragPreview"
             style={
               {
-                '--drag-x': `${dragState.pointerX}px`,
-                '--drag-y': `${dragState.pointerY}px`,
+                "--drag-x": `${dragState.pointerX}px`,
+                "--drag-y": `${dragState.pointerY}px`,
               } as React.CSSProperties
             }
             aria-hidden="true"
           >
-            <img
-              src={
-                draggedCreature
-                  ? creatureDefinitions[draggedCreature.creatureId].image
-                  : cosmicEggImage
-              }
-              alt=""
-              decoding="async"
-              onError={(event) => event.currentTarget.classList.add('is-missing')}
-            />
+            {draggedCreature ? <img src={creatureDefinitions[draggedCreature.creatureId].image} alt="" /> : null}
+            {draggedEgg ? <img src="/ui/ovo-cosmico.png" alt="" /> : null}
           </div>
         ) : null}
 
         {mergeBurst ? (
           <div
-            className={`mergeBurst ${mergeBurst.isDiscovery ? 'mergeBurst--discovery' : ''}`}
+            className={`mergeBurst ${mergeBurst.isDiscovery ? "mergeBurst--discovery" : ""}`}
             style={
               {
-                '--burst-x': `${mergeBurst.x}px`,
-                '--burst-y': `${mergeBurst.y}px`,
+                "--burst-x": `${mergeBurst.x}px`,
+                "--burst-y": `${mergeBurst.y}px`,
               } as React.CSSProperties
             }
             aria-hidden="true"
@@ -992,17 +539,7 @@ function App() {
             <i />
           </div>
         ) : null}
-
-        </div>
       </div>
-
-      <section className="orientationGuard" role="status" aria-live="polite">
-        <div className="orientationGuard__phone" aria-hidden="true">
-          <span />
-        </div>
-        <h2>Vire o celular para jogar</h2>
-        <p>Anomalias Cósmicas foi pensado para funcionar em modo vertical.</p>
-      </section>
 
       {isDexOpen ? (
         <Dex
@@ -1011,83 +548,31 @@ function App() {
         />
       ) : null}
 
-      {/* Futuro: reativar AnomalyShop aqui se a compra voltar a ter submenu/upgrades. */}
-
-      {!model.state.hasSeenWelcomeModal ? (
-        <div className="modalBackdrop" role="presentation">
-          <section
-            className="modal welcomeModal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="welcome-title"
-          >
-            <p className="modal__eyebrow">Anomalias Cósmicas</p>
-            <h2 id="welcome-title">Bem-vindo ao desconhecido! ✨</h2>
-            <p>
-              Crie anomalias, <strong>combine, misture e experimente</strong>. Descubra novas
-              formas e desvende os segredos do universo.
-            </p>
-            <button
-              className="primaryButton"
-              type="button"
-              onClick={() => dispatch({ type: 'dismissWelcome' })}
-            >
-              Explorar
-            </button>
-          </section>
-        </div>
-      ) : null}
-
-      {isCloudSavePromptOpen ? (
-        <div className="modalBackdrop" role="presentation">
-          <section
-            className="modal cloudSavePrompt"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cloud-save-title"
-          >
-            <span className="cloudSavePrompt__icon" aria-hidden="true">
-              <Cloud size={28} />
-            </span>
-            <p className="modal__eyebrow">Salvar progresso</p>
-            <h2 id="cloud-save-title">Proteger seu universo?</h2>
-            <p>
-              Conecte sua conta Google para manter seu save seguro e continuar de onde parou em
-              outro dispositivo.
-            </p>
-            <div className="cloudSavePrompt__actions">
-              <button
-                className="primaryButton"
-                type="button"
-                disabled={isCloudSavePromptSigningIn}
-                onClick={handleCloudPromptSignIn}
-              >
-                {isCloudSavePromptSigningIn ? 'Abrindo...' : 'Conectar Google'}
-              </button>
-              <button
-                className="secondaryButton"
-                type="button"
-                disabled={isCloudSavePromptSigningIn}
-                onClick={() => {
-                  setIsCloudSavePromptOpen(false);
-                  dispatch({ type: 'dismissCloudSavePrompt' });
-                }}
-              >
-                Agora não
-              </button>
-            </div>
-          </section>
-        </div>
+      {isShopOpen ? (
+        <AnomalyShop
+          coins={model.state.coins}
+          state={model.state}
+          onBuyEgg={() => {
+            dispatch({ type: "buyEgg" });
+          }}
+          onClose={() => setIsShopOpen(false)}
+        />
       ) : null}
 
       {isResetConfirmOpen ? (
         <div className="modalBackdrop" role="presentation">
-          <section className="modal resetConfirm" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+          <section
+            className="modal resetConfirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-title"
+          >
             <p className="modal__eyebrow">Resetar save</p>
-            <h2 id="reset-title">Tudo será removido</h2>
+            <h2 id="reset-title">Tudo sera removido</h2>
             <p>
-              Essa ação zera moedas, criaturas, ovos, Dex, compras, portal e mapas. Se você
-              estiver conectado, esse reset também será sincronizado na nuvem.
+              Essa acao zera moedas, criaturas, Dex, compras e descobertas. Se
+              voce estiver conectado, esse reset tambem sera sincronizado na
+              nuvem.
             </p>
             <div className="resetConfirm__actions">
               <button
@@ -1103,11 +588,9 @@ function App() {
                 onClick={() => {
                   setIsResetConfirmOpen(false);
                   setIsDexOpen(false);
-                  setIsSellMode(false);
-                  setPendingSale(null);
-                  setPendingSacrifice(null);
+                  setIsShopOpen(false);
                   setVisibleDiscoveryId(null);
-                  dispatch({ type: 'reset' });
+                  dispatch({ type: "reset" });
                 }}
               >
                 Resetar tudo
@@ -1117,134 +600,12 @@ function App() {
         </div>
       ) : null}
 
-      {pendingSale && pendingSaleDefinition ? (
-        <div className="modalBackdrop" role="presentation">
-          <section
-            className="modal resetConfirm compactConfirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sell-title"
-          >
-            <p className="modal__eyebrow">Remover anomalia</p>
-            <h2 id="sell-title">Vender {pendingSaleDefinition.name}?</h2>
-            <p>
-              A criatura sai do tabuleiro e você recebe {pendingSaleValue} moedas. Dex, compras
-              e descobertas não mudam.
-            </p>
-            <div className="resetConfirm__actions">
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={() => {
-                  setPendingSale(null);
-                  setIsSellMode(false);
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                className="dangerButton"
-                type="button"
-                onClick={() => {
-                  dispatch({ type: 'sell', instanceId: pendingSale.instanceId });
-                  setPendingSale(null);
-                  setIsSellMode(false);
-                }}
-              >
-                Vender
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {pendingSacrifice && pendingSacrificeDefinition ? (
-        <div className="modalBackdrop" role="presentation">
-          <section
-            className="modal resetConfirm compactConfirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sacrifice-title"
-          >
-            <p className="modal__eyebrow">Portal rachado</p>
-            <h2 id="sacrifice-title">
-              {pendingSacrificeCreatureProductionAfter === 0
-                ? 'Última anomalia produtora'
-                : pendingSacrificeProductionAfter <= gameConfig.criticalProductionPerSecond
-                  ? 'Produção crítica'
-                  : 'Sacrificar anomalia?'}
-            </h2>
-            <p>{pendingSacrificeDefinition.name} será consumido permanentemente pelo portal.</p>
-            {pendingSacrificeCreatureProductionAfter === 0 ? (
-              <p className="warningText">
-                Sua produção das anomalias cairá para 0/s. Você dependerá da energia residual do
-                portal, dos ovos gratuitos e da reconstrução da colônia.
-              </p>
-            ) : pendingSacrificeProductionAfter <= gameConfig.criticalProductionPerSecond ? (
-              <p className="warningText">
-                Este sacrifício reduzirá sua produção para apenas{' '}
-                {formatCoins(pendingSacrificeProductionAfter)}/s. Reconstruir sua colônia poderá
-                levar algum tempo.
-              </p>
-            ) : (
-              <p className="warningText">
-                Sua produção cairá de {formatCoins(productionPerSecond)}/s para{' '}
-                {formatCoins(pendingSacrificeProductionAfter)}/s.
-              </p>
-            )}
-            <p className="sacrificeStats">
-              Energia recebida: +{formatCoins(pendingSacrificeEnergy)}
-              <br />
-              Perda de produção: {formatCoins(pendingSacrificeProductionLoss)}/s (
-              {Math.round(pendingSacrificeLossPercent)}%)
-            </p>
-            <div className="resetConfirm__actions">
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={() => setPendingSacrifice(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                className="dangerButton"
-                type="button"
-                onClick={() => {
-                  dispatch({ type: 'sacrifice', instanceId: pendingSacrifice.instanceId });
-                  setPendingSacrifice(null);
-                }}
-              >
-                {pendingSacrificeCreatureProductionAfter === 0 ? 'Sacrificar mesmo assim' : 'Sacrificar'}
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {isMapPreviewOpen ? (
-        <div className="modalBackdrop" role="presentation">
-          <section
-            className="modal compactConfirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="map-preview-title"
-          >
-            <p className="modal__eyebrow">Portal ativo</p>
-            <h2 id="map-preview-title">Mapa 2</h2>
-            <p>Em breve...</p>
-            <button className="primaryButton" type="button" onClick={() => setIsMapPreviewOpen(false)}>
-              OK
-            </button>
-          </section>
-        </div>
-      ) : null}
-
       {visibleDiscoveryId ? (
         <DiscoveryModal
           creatureId={visibleDiscoveryId}
           onClose={() => {
             setVisibleDiscoveryId(null);
-            dispatch({ type: 'dismissDiscovery' });
+            dispatch({ type: "dismissDiscovery" });
           }}
         />
       ) : null}
@@ -1252,11 +613,14 @@ function App() {
       {initial.offlineReward ? (
         <OfflineRewardModal
           reward={initial.offlineReward}
-          isRewardedAdAvailable={isRewardedAdAvailable}
-          isPending={isRewardedAdPending || hasClaimedOfflineRewardRef.current}
-          rewardedAdMessage={rewardedAdMessage}
-          onCollect={() => handleOfflineRewardCollect(1)}
-          onCollectDouble={handleRewardedOfflineReward}
+          isRewardedAdAvailable={false}
+          isPending={false}
+          rewardedAdMessage={null}
+          onCollect={() => {
+            dispatch({ type: "collectOfflineReward", reward: initial.offlineReward!, multiplier: 1 });
+            initial.dismissOfflineReward();
+          }}
+          onCollectDouble={() => undefined}
         />
       ) : null}
     </main>

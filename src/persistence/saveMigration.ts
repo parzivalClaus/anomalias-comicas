@@ -1,8 +1,8 @@
 import { gameConfig } from '../data/gameConfig';
 import type { GameState, SaveOwnerType, VersionedGameSave } from '../types/game';
-import { decayEggPurchasePressure, getTotalProductionPerSecond } from '../utils/economy';
+import { decayEggPurchasePressure, getEggPurchasePrice, getTotalProductionPerSecond } from '../utils/economy';
 
-export const currentSaveVersion = 7;
+export const currentSaveVersion = 8;
 
 function isGameState(value: unknown): value is GameState {
   if (!value || typeof value !== 'object') return false;
@@ -87,6 +87,16 @@ function normalizeState(state: GameState): GameState {
     state.eggPurchasePressure ?? 0,
     secondsSinceLastSave,
   );
+  const normalizedForPricing = {
+    ...state,
+    creatures,
+    portalState,
+    eggPurchasePressure,
+    highestIncomePerSecond: Math.max(
+      state.highestIncomePerSecond ?? currentIncomePerSecond,
+      currentIncomePerSecond,
+    ),
+  };
 
   return {
     ...state,
@@ -102,10 +112,11 @@ function normalizeState(state: GameState): GameState {
     purchaseCounts: state.purchaseCounts ?? {},
     purchasedEggCount: state.purchasedEggCount ?? 0,
     eggPurchasePressure,
-    highestIncomePerSecond: Math.max(
-      state.highestIncomePerSecond ?? currentIncomePerSecond,
-      currentIncomePerSecond,
+    currentEggPrice: Math.max(
+      gameConfig.eggPricing.basePrice,
+      state.currentEggPrice ?? getEggPurchasePrice(normalizedForPricing),
     ),
+    highestIncomePerSecond: normalizedForPricing.highestIncomePerSecond,
     hasSeenWelcomeModal: state.hasSeenWelcomeModal ?? true,
     hasSeenCloudSavePrompt: state.hasSeenCloudSavePrompt ?? false,
     hasSeenPortalReaction: state.hasSeenPortalReaction ?? false,
@@ -144,7 +155,7 @@ export function migrateSave(value: unknown): VersionedGameSave | null {
 
   if ('saveVersion' in value && 'state' in value) {
     const versioned = value as VersionedGameSave;
-    if (![1, 2, 3, 4, 5, 6, 7].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
+    if (![1, 2, 3, 4, 5, 6, 7, 8].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
       return null;
     }
 

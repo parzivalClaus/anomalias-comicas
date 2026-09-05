@@ -123,6 +123,7 @@ export function getInitialState(): GameState {
     purchaseCounts: {},
     purchasedEggCount: 0,
     eggPurchasePressure: 0,
+    currentEggPrice: gameConfig.eggPricing.basePrice,
     highestIncomePerSecond: 0,
     lastSavedAt: Date.now(),
     hasSeenWelcomeModal: false,
@@ -273,7 +274,7 @@ function removeCreaturesAndCollectPending(state: GameState, instanceIds: string[
 export function reducer(model: GameModel, action: GameAction): GameModel {
   switch (action.type) {
     case 'buyEgg': {
-      const cost = getEggPurchasePrice(model.state);
+      const cost = model.state.currentEggPrice;
       const freeSlot = findFreeSlot(model.state.creatures, model.state.eggs);
 
       if (freeSlot === null) {
@@ -284,18 +285,24 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         return { ...model, toast: 'Moedas insuficientes.' };
       }
 
+      const nextEggPurchasePressure =
+        model.state.eggPurchasePressure + gameConfig.eggPricing.purchasePressureIncrease;
+      const stateAfterPurchase = updateHighestIncome({
+        ...model.state,
+        coins: model.state.coins - cost,
+        eggs: [...model.state.eggs, createEgg(freeSlot, 'purchased')],
+        purchasedEggCount: model.state.purchasedEggCount + 1,
+        eggPurchasePressure: nextEggPurchasePressure,
+        lastSavedAt: Date.now(),
+      });
+
       return {
         ...model,
         toast: null,
         soundCue: createSoundCue('buy'),
         state: {
-          ...model.state,
-          coins: model.state.coins - cost,
-          eggs: [...model.state.eggs, createEgg(freeSlot, 'purchased')],
-          purchasedEggCount: model.state.purchasedEggCount + 1,
-          eggPurchasePressure:
-            model.state.eggPurchasePressure + gameConfig.eggPricing.purchasePressureIncrease,
-          lastSavedAt: Date.now(),
+          ...stateAfterPurchase,
+          currentEggPrice: getEggPurchasePrice(stateAfterPurchase),
         },
       };
     }

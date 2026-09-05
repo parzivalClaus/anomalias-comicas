@@ -85,6 +85,7 @@ export interface GameState {
   purchaseCounts: Partial<Record<CreatureId, number>>;
   purchasedEggCount: number;
   eggPurchasePressure: number;
+  currentEggPrice: number;
   highestIncomePerSecond: number;
   lastSavedAt: number;
   hasSeenWelcomeModal: boolean;
@@ -107,7 +108,7 @@ export interface OfflineReward {
 }
 
 export interface VersionedGameSave {
-  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   state: GameState;
   updatedAt: string;
   ownerType: SaveOwnerType;
