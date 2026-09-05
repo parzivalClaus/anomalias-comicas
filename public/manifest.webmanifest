@@ -1,7 +1,7 @@
 {
-  "name": "Anomalias Cosmicas",
+  "name": "Anomalias Cósmicas",
   "short_name": "Anomalias",
-  "description": "Jogo incremental de anomalias cosmicas.",
+  "description": "Jogo incremental de anomalias cósmicas.",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",

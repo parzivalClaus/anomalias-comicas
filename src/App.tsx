@@ -182,7 +182,7 @@ function App() {
       await signInWithGoogle();
     } catch {
       setIsCloudSavePromptSigningIn(false);
-      dispatch({ type: 'showToast', message: 'NÃ£o foi possÃ­vel abrir o login.' });
+      dispatch({ type: 'showToast', message: 'Não foi possível abrir o login.' });
     }
   }
 
@@ -193,7 +193,7 @@ function App() {
       await signInWithGoogle();
     } catch {
       setIsInitialAuthSigningIn(false);
-      dispatch({ type: 'showToast', message: 'NÃ£o foi possÃ­vel abrir o login.' });
+      dispatch({ type: 'showToast', message: 'Não foi possível abrir o login.' });
     }
   }
 
@@ -647,8 +647,8 @@ function App() {
     return (
       <main className="startupScreen" aria-busy="true">
         <section className="startupPanel" aria-live="polite">
-          <p className="modal__eyebrow">Anomalias CÃ³smicas</p>
-          <h1>Anomalias CÃ³smicas</h1>
+          <p className="modal__eyebrow">Anomalias Cósmicas</p>
+          <h1>Anomalias Cósmicas</h1>
           <span className="startupSpinner" aria-hidden="true" />
           <p>Sincronizando...</p>
         </section>
@@ -927,7 +927,7 @@ function App() {
                   dispatch({ type: 'dismissCloudSavePrompt' });
                 }}
               >
-                Agora nÃ£o
+                Agora não
               </button>
             </div>
           </section>
