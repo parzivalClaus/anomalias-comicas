@@ -14,7 +14,13 @@ export function DiscoveryModal({ creatureId, onClose }: DiscoveryModalProps) {
     <div className="modalBackdrop" role="presentation">
       <section className="modal discovery" role="dialog" aria-modal="true" aria-label="Nova anomalia">
         <p className="modal__eyebrow">Nova anomalia descoberta</p>
-        <img className="discovery__image" src={creature.image} alt="" />
+        <img
+          className="discovery__image"
+          src={creature.image}
+          alt=""
+          decoding="async"
+          onError={(event) => event.currentTarget.classList.add('is-missing')}
+        />
         <h2>#{creature.dexNumber.toString().padStart(3, '0')} {creature.name}</h2>
         <p>{creature.description}</p>
         <button className="primaryButton" type="button" onClick={onClose}>

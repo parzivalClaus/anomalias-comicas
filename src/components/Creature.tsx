@@ -52,7 +52,14 @@ export function Creature({
       }
     >
       <span className="creature__shadow" />
-      <img className="creature__image" src={definition.image} alt="" draggable="false" />
+      <img
+        className="creature__image"
+        src={definition.image}
+        alt=""
+        draggable="false"
+        decoding="async"
+        onError={(event) => event.currentTarget.classList.add('is-missing')}
+      />
       {pendingCoins > 0 ? (
         <span
           className={`creature__pendingCoins ${

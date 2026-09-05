@@ -32,7 +32,17 @@ export function Dex({ discoveredCreatureIds, onClose }: DexProps) {
             return (
               <article className="dexEntry" key={definition.id}>
                 <div className={`dexEntry__portrait ${isDiscovered ? '' : 'is-hidden'}`}>
-                  <img src={definition.image} alt="" />
+                  {isDiscovered ? (
+                    <img
+                      src={definition.image}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => event.currentTarget.classList.add('is-missing')}
+                    />
+                  ) : (
+                    <span aria-hidden="true" />
+                  )}
                 </div>
                 <div>
                   <p className="dexEntry__number">#{definition.dexNumber.toString().padStart(3, '0')}</p>

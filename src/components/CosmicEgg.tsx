@@ -32,7 +32,14 @@ export function CosmicEgg({ egg, isDragging = false, onPointerDown }: CosmicEggP
       style={{ '--egg-wobble-delay': `${wobbleDelay}s` } as React.CSSProperties}
     >
       <span className="cosmicEgg__shadow" />
-      <img className="cosmicEgg__image" src={cosmicEggImage} alt="" draggable="false" />
+      <img
+        className="cosmicEgg__image"
+        src={cosmicEggImage}
+        alt=""
+        draggable="false"
+        decoding="async"
+        onError={(event) => event.currentTarget.classList.add('is-missing')}
+      />
       <span className="cosmicEgg__timer">{formatEggTime(egg.remainingIncubationSeconds)}</span>
     </button>
   );

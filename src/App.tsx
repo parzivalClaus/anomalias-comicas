@@ -37,6 +37,13 @@ import {
   type RewardedAdRequest,
   type RewardedAdResult,
 } from './ads/rewardedAdService';
+import { evolutionRecipes } from './data/evolutions';
+
+const boardBackgrounds = {
+  dormant: '/backgrounds/game-board.png',
+  cracked: '/backgrounds/game-board-portal-cracked.png',
+  active: '/backgrounds/game-board-portal-open.png',
+} as const;
 
 function requestPortraitOrientationLock() {
   const orientation = screen.orientation as (ScreenOrientation & {
@@ -48,6 +55,12 @@ function requestPortraitOrientationLock() {
   void lock.call(orientation, 'portrait').catch(() => {
     // Browsers may reject orientation lock outside installed/fullscreen contexts.
   });
+}
+
+function preloadImage(src: string) {
+  const image = new Image();
+  image.decoding = 'async';
+  image.src = src;
 }
 
 function App() {
@@ -124,6 +137,39 @@ function App() {
           Math.round((model.state.portalEnergy / model.state.portalEnergyRequired) * 100),
         )
       : 0;
+  const boardBackground = boardBackgrounds[model.state.portalState];
+  const creatureCounts = model.state.creatures.reduce<Partial<Record<string, number>>>(
+    (counts, creature) => ({
+      ...counts,
+      [creature.creatureId]: (counts[creature.creatureId] ?? 0) + 1,
+    }),
+    {},
+  );
+  const preloadCandidateImages = new Set<string>();
+
+  if (
+    model.state.portalState === 'dormant' &&
+    (model.state.discoveredCreatureIds.includes('nebulux') ||
+      model.state.creatures.some((creature) => creature.creatureId === 'nebulux'))
+  ) {
+    preloadCandidateImages.add(boardBackgrounds.cracked);
+  }
+
+  if (model.state.portalState === 'cracked' && portalProgress >= 80) {
+    preloadCandidateImages.add(boardBackgrounds.active);
+  }
+
+  for (const recipe of evolutionRecipes) {
+    const [firstInput, secondInput] = recipe.inputs;
+    const hasImmediateMerge =
+      firstInput === secondInput
+        ? (creatureCounts[firstInput] ?? 0) >= 2
+        : (creatureCounts[firstInput] ?? 0) >= 1 && (creatureCounts[secondInput] ?? 0) >= 1;
+
+    if (hasImmediateMerge) {
+      preloadCandidateImages.add(creatureDefinitions[recipe.result].image);
+    }
+  }
   const pendingSaleDefinition = pendingSale ? creatureDefinitions[pendingSale.creatureId] : null;
   const pendingSaleValue = pendingSale ? getSellValue(pendingSale.creatureId) : 0;
   const pendingSacrificeDefinition = pendingSacrifice
@@ -156,6 +202,7 @@ function App() {
     isConfigured && !isAuthLoading && !user && !hasChosenGuestSession;
   const isHydrating = isAuthLoading || Boolean(user && !hasResolvedInitialSync);
   const isGameplayLocked = isHydrating || shouldShowInitialAuthPrompt || isInitialAuthSigningIn;
+  const preloadCandidateSignature = [...preloadCandidateImages].sort().join('|');
   const hasPlayedEnoughForCloudPrompt =
     model.state.hasCompletedFirstMergeTutorial ||
     model.state.discoveredCreatureIds.length >= 2 ||
@@ -193,6 +240,25 @@ function App() {
   useEffect(() => {
     requestPortraitOrientationLock();
   }, []);
+
+  useEffect(() => {
+    if (isGameplayLocked || !preloadCandidateSignature) return;
+
+    const sources = preloadCandidateSignature.split('|');
+    const preload = () => sources.forEach(preloadImage);
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+      const idleId = idleWindow.requestIdleCallback(preload, { timeout: 4000 });
+      return () => idleWindow.cancelIdleCallback?.(idleId);
+    }
+
+    const timeout = window.setTimeout(preload, 1400);
+    return () => window.clearTimeout(timeout);
+  }, [isGameplayLocked, preloadCandidateSignature]);
 
   useEffect(() => {
     let cancelled = false;
@@ -795,6 +861,11 @@ function App() {
           isPortalReacting ? 'gameStage--portalPulse' : '',
           isEnvironmentReacting ? 'gameStage--environmentPulse' : '',
         ].join(' ')}
+        style={
+          {
+            '--scene-background-image': `url("${boardBackground}")`,
+          } as React.CSSProperties
+        }
       >
         <div className="sceneLayer" aria-hidden="true" />
         <GameBoard
@@ -915,6 +986,8 @@ function App() {
                   : cosmicEggImage
               }
               alt=""
+              decoding="async"
+              onError={(event) => event.currentTarget.classList.add('is-missing')}
             />
           </div>
         ) : null}
