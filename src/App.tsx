@@ -104,10 +104,7 @@ function App() {
   const productionPerSecond = getTotalProductionPerSecond(model.state);
   const occupiedSlots = model.state.creatures.length + model.state.eggs.length;
   const isBoardFull = occupiedSlots >= gameConfig.boardSlots;
-  const eggPrice = getEggPurchasePrice(
-    model.state.highestIncomePerSecond,
-    model.state.purchasedEggCount,
-  );
+  const eggPrice = getEggPurchasePrice(model.state);
   const canBuyEgg = !isBoardFull && model.state.coins >= eggPrice;
   const eggTimerSeconds = model.state.remainingEggSpawnSeconds;
   const mergeTutorialHint = model.state.hasCompletedFirstMergeTutorial

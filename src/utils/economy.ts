@@ -35,17 +35,43 @@ export function getPurchasePrice(
   return Math.round(basePrice * Math.pow(growth, purchaseCount));
 }
 
-export function getEggPurchasePrice(highestIncomePerSecond: number, purchasedEggCount = 0) {
+interface EggPricingState {
+  creatures: CreatureInstance[];
+  portalState: PortalState;
+  highestIncomePerSecond: number;
+  eggPurchasePressure: number;
+}
+
+export function getEffectiveEggPricingProduction(state: EggPricingState) {
+  const currentProductionPerSecond =
+    getProductionPerSecond(state.creatures) + getPortalResidualIncomePerSecond(state.portalState);
+  const peakFloor =
+    state.highestIncomePerSecond * gameConfig.eggPricing.peakProductionFloorFactor;
+
+  return Math.max(currentProductionPerSecond, peakFloor);
+}
+
+export function getEggPurchasePrice(state: EggPricingState) {
+  const effectiveProductionPerSecond = getEffectiveEggPricingProduction(state);
   const economicEggPrice = Math.max(
-    gameConfig.baseEggPrice,
-    highestIncomePerSecond * gameConfig.eggTargetProductionSeconds,
-  );
-  const purchasePressure = gameConfig.baseEggPrice * Math.pow(
-    gameConfig.eggPurchasePriceGrowth,
-    purchasedEggCount,
+    gameConfig.eggPricing.basePrice,
+    effectiveProductionPerSecond * gameConfig.eggPricing.targetProductionSeconds,
   );
 
-  return Math.round(Math.max(economicEggPrice, purchasePressure));
+  return Math.round(
+    economicEggPrice *
+      Math.pow(gameConfig.eggPricing.purchasePressureGrowth, Math.max(0, state.eggPurchasePressure)),
+  );
+}
+
+export function decayEggPurchasePressure(currentPressure: number, elapsedSeconds: number) {
+  if (currentPressure <= 0) return 0;
+  if (gameConfig.eggPricing.purchasePressureDecaySeconds <= 0) return currentPressure;
+
+  return Math.max(
+    0,
+    currentPressure - elapsedSeconds / gameConfig.eggPricing.purchasePressureDecaySeconds,
+  );
 }
 
 export function getSellValue(creatureId: CreatureId) {

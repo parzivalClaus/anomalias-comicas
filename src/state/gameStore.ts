@@ -12,6 +12,7 @@ import type {
   OfflineReward,
 } from '../types/game';
 import {
+  decayEggPurchasePressure,
   getEggPurchasePrice,
   getPortalResidualIncomePerSecond,
   getSellValue,
@@ -121,6 +122,7 @@ export function getInitialState(): GameState {
     discoveredCreatureIds: [],
     purchaseCounts: {},
     purchasedEggCount: 0,
+    eggPurchasePressure: 0,
     highestIncomePerSecond: 0,
     lastSavedAt: Date.now(),
     hasSeenWelcomeModal: false,
@@ -271,10 +273,7 @@ function removeCreaturesAndCollectPending(state: GameState, instanceIds: string[
 export function reducer(model: GameModel, action: GameAction): GameModel {
   switch (action.type) {
     case 'buyEgg': {
-      const cost = getEggPurchasePrice(
-        model.state.highestIncomePerSecond,
-        model.state.purchasedEggCount,
-      );
+      const cost = getEggPurchasePrice(model.state);
       const freeSlot = findFreeSlot(model.state.creatures, model.state.eggs);
 
       if (freeSlot === null) {
@@ -294,6 +293,8 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           coins: model.state.coins - cost,
           eggs: [...model.state.eggs, createEgg(freeSlot, 'purchased')],
           purchasedEggCount: model.state.purchasedEggCount + 1,
+          eggPurchasePressure:
+            model.state.eggPurchasePressure + gameConfig.eggPricing.purchasePressureIncrease,
           lastSavedAt: Date.now(),
         },
       };
@@ -631,6 +632,10 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
     case 'tick': {
       const elapsedSeconds = action.elapsedSeconds;
       const productionPerSecond = getTotalProductionPerSecond(model.state);
+      const eggPurchasePressure = decayEggPurchasePressure(
+        model.state.eggPurchasePressure,
+        elapsedSeconds,
+      );
       const residualIncome =
         getPortalResidualIncomePerSecond(model.state.portalState) * elapsedSeconds;
       const shouldResolveEggCycle = model.state.remainingEggSpawnSeconds <= elapsedSeconds;
@@ -716,6 +721,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           coins: model.state.coins + residualIncome,
           creatures: creaturesWithProduction,
           eggs: incubatingEggs,
+          eggPurchasePressure,
           discoveredCreatureIds,
           remainingEggSpawnSeconds:
             spawnedEgg || missedEgg

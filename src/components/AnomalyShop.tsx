@@ -2,23 +2,22 @@ import { X } from 'lucide-react';
 import cosmicEggImage from '../assets/ui/ovo-cosmico.png';
 import { gameConfig } from '../data/gameConfig';
 import { formatCoins, getEggPurchasePrice } from '../utils/economy';
+import type { GameState } from '../types/game';
 
 interface AnomalyShopProps {
   coins: number;
-  highestIncomePerSecond: number;
-  purchasedEggCount: number;
+  state: GameState;
   onBuyEgg: () => void;
   onClose: () => void;
 }
 
 export function AnomalyShop({
   coins,
-  highestIncomePerSecond,
-  purchasedEggCount,
+  state,
   onBuyEgg,
   onClose,
 }: AnomalyShopProps) {
-  const price = getEggPurchasePrice(highestIncomePerSecond, purchasedEggCount);
+  const price = getEggPurchasePrice(state);
   const canAfford = coins >= price;
 
   return (
