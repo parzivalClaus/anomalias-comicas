@@ -10,7 +10,7 @@ export function getProductionPerSecond(creatures: CreatureInstance[]) {
 }
 
 export function getPortalResidualIncomePerSecond(portalState: PortalState) {
-  return portalState === 'cracked' || portalState === 'active'
+  return portalState === 'cracked' || portalState === 'charged' || portalState === 'active'
     ? gameConfig.portalResidualIncomePerSecond
     : 0;
 }

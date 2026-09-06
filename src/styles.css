@@ -334,7 +334,8 @@ button {
   cursor: pointer;
 }
 
-.gameStage--portal-cracked .portalDropZone::after {
+.gameStage--portal-cracked .portalDropZone::after,
+.gameStage--portal-charged .portalDropZone::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -481,6 +482,10 @@ button {
 
 .portalMeter--active {
   border-color: rgba(141, 255, 241, 0.76);
+}
+
+.gameStage--portal-charged .portalMeter {
+  border-color: rgba(255, 231, 132, 0.78);
 }
 
 .gameStage--portal-active .portalHint {

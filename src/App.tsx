@@ -19,13 +19,16 @@ import { calculateOfflineReward, reducer, type DragState } from './state/gameSto
 import type { CreatureInstance, EggState, EnvironmentId } from './types/game';
 import {
   formatCoins,
-  getProductionPerSecond,
   getSellValue,
   getTotalProductionPerSecond,
 } from './utils/economy';
 import { evaluateEnvironmentalTransformation } from './utils/environmentalTransform';
 import { findEnvironmentalHint, findMergeTutorialHint } from './utils/hints';
 import { evaluateMerge } from './utils/merge';
+import {
+  getPortalRequestCooldownRemainingSeconds,
+  isFinalMapOneNaturalMergeResult,
+} from './utils/portalRequests';
 import { playSoundCue, unlockGameAudio } from './utils/sound';
 import { useCloudSync } from './persistence/useCloudSync';
 import { saveLocal } from './persistence/localSave';
@@ -38,6 +41,7 @@ import { evolutionRecipes } from './data/evolutions';
 const boardBackgrounds = {
   dormant: '/backgrounds/game-board.png',
   cracked: '/backgrounds/game-board-portal-cracked.png',
+  charged: '/backgrounds/game-board-portal-cracked.png',
   active: '/backgrounds/game-board-portal-open.png',
 } as const;
 
@@ -57,6 +61,14 @@ function preloadImage(src: string) {
   const image = new Image();
   image.decoding = 'async';
   image.src = src;
+}
+
+function formatShortTimer(seconds: number) {
+  const safeSeconds = Math.max(0, Math.ceil(seconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
 function clampWorldCoordinate(value: number) {
@@ -93,7 +105,6 @@ function App() {
   const [isSellMode, setIsSellMode] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
-  const [pendingSacrifice, setPendingSacrifice] = useState<CreatureInstance | null>(null);
   const [isMapPreviewOpen, setIsMapPreviewOpen] = useState(false);
   const [isPortalReacting, setIsPortalReacting] = useState(false);
   const [lastInteractionAt, setLastInteractionAt] = useState(Date.now());
@@ -118,7 +129,6 @@ function App() {
   const hasClaimedOfflineRewardRef = useRef(false);
   const lastRenderedProductionPulseRef = useRef(model.productionPulseId);
 
-  const creatureProductionPerSecond = getProductionPerSecond(model.state.creatures);
   const productionPerSecond = getTotalProductionPerSecond(model.state);
   const occupiedEntities = model.state.creatures.length + model.state.eggs.length;
   const isBoardFull = occupiedEntities >= gameConfig.maxWorldEntities;
@@ -185,7 +195,10 @@ function App() {
     preloadCandidateImages.add(boardBackgrounds.cracked);
   }
 
-  if (model.state.portalState === 'cracked' && portalProgress >= 80) {
+  if (
+    (model.state.portalState === 'cracked' && portalProgress >= 80) ||
+    model.state.portalState === 'charged'
+  ) {
     preloadCandidateImages.add(boardBackgrounds.active);
   }
 
@@ -202,22 +215,11 @@ function App() {
   }
   const pendingSaleDefinition = pendingSale ? creatureDefinitions[pendingSale.creatureId] : null;
   const pendingSaleValue = pendingSale ? getSellValue(pendingSale.creatureId) : 0;
-  const pendingSacrificeDefinition = pendingSacrifice
-    ? creatureDefinitions[pendingSacrifice.creatureId]
+  const portalRequest = model.state.activePortalRequest;
+  const portalRequestDefinition = portalRequest
+    ? creatureDefinitions[portalRequest.creatureId]
     : null;
-  const pendingSacrificeEnergy = pendingSacrificeDefinition?.portalEnergyValue ?? 0;
-  const pendingSacrificeProductionLoss = pendingSacrificeDefinition?.coinsPerSecond ?? 0;
-  const pendingSacrificeProductionAfter = Math.max(
-    0,
-    productionPerSecond - pendingSacrificeProductionLoss,
-  );
-  const pendingSacrificeCreatureProductionAfter = pendingSacrifice
-    ? Math.max(0, creatureProductionPerSecond - pendingSacrificeProductionLoss)
-    : creatureProductionPerSecond;
-  const pendingSacrificeLossPercent =
-    productionPerSecond > 0
-      ? (pendingSacrificeProductionLoss / productionPerSecond) * 100
-      : 0;
+  const portalRequestCooldownSeconds = getPortalRequestCooldownRemainingSeconds(model.state);
   const { user, isConfigured, isLoading: isAuthLoading } = useAuth();
   const { syncStatus, hasResolvedInitialSync } = useCloudSync({
     user,
@@ -251,7 +253,6 @@ function App() {
     !model.state.hasSeenWelcomeModal ||
     isResetConfirmOpen ||
     Boolean(pendingSale) ||
-    Boolean(pendingSacrifice) ||
     isMapPreviewOpen ||
     Boolean(visibleDiscoveryId) ||
     Boolean(initial.offlineReward);
@@ -507,6 +508,19 @@ function App() {
 
     const merge = evaluateMerge(dragged, target);
     if (merge.status === 'success') {
+      if (
+        isFinalMapOneNaturalMergeResult(merge.resultCreatureId) &&
+        model.state.portalState !== 'charged' &&
+        model.state.portalState !== 'active'
+      ) {
+        dispatch({
+          type: 'blockedMerge',
+          message:
+            'Esta anomalia não pode evoluir neste mundo... O portal ainda não está estabilizado.',
+        });
+        return;
+      }
+
       const isDiscovery = !model.state.discoveredCreatureIds.includes(merge.resultCreatureId);
 
       if (burstPoint) {
@@ -560,30 +574,14 @@ function App() {
     setDragState(null);
     if (!dragged) return;
 
+    if (environmentId === 'portal' && model.state.portalState !== 'dormant') {
+      dispatch({ type: 'deliverPortalRequest', instanceId: dragged.instanceId });
+      return;
+    }
+
     const transformation = evaluateEnvironmentalTransformation(dragged, environmentId);
     if (transformation.status !== 'success') {
-      if (model.state.portalState === 'cracked') {
-        const definition = creatureDefinitions[dragged.creatureId];
-        const totalProductionAfter = Math.max(0, productionPerSecond - definition.coinsPerSecond);
-        const creatureProductionAfter = Math.max(
-          0,
-          creatureProductionPerSecond - definition.coinsPerSecond,
-        );
-        const lossPercent =
-          productionPerSecond > 0 ? (definition.coinsPerSecond / productionPerSecond) * 100 : 0;
-        const shouldWarn =
-          creatureProductionAfter === 0 ||
-          totalProductionAfter <= gameConfig.criticalProductionPerSecond ||
-          lossPercent >= gameConfig.portalSacrificeWarningPercent;
-
-        if (shouldWarn) {
-          setPendingSacrifice(dragged);
-        } else {
-          dispatch({ type: 'sacrifice', instanceId: dragged.instanceId });
-        }
-      } else {
-        dispatch({ type: 'showToast', message: 'Nada respondeu.' });
-      }
+      dispatch({ type: 'showToast', message: 'Nada respondeu.' });
       return;
     }
 
@@ -927,8 +925,14 @@ function App() {
           >
             {model.state.portalState === 'cracked' ? (
               <span className="portalMeter__message">
-                O portal despertou... e parece faminto.
+                {model.state.portalRequestState === 'cooldown'
+                  ? `Próximo pedido em ${formatShortTimer(portalRequestCooldownSeconds)}`
+                  : portalRequestDefinition && portalRequest
+                    ? `Requer: ${portalRequestDefinition.name} ${portalRequest.deliveredCount}/${portalRequest.requiredCount}`
+                    : 'O portal está faminto...'}
               </span>
+            ) : model.state.portalState === 'charged' ? (
+              <span className="portalMeter__message">O portal está estabilizado... Algo ainda falta.</span>
             ) : null}
             <p>
               {model.state.portalState === 'active' ? <span>Portal ativo</span> : null}
@@ -1159,7 +1163,6 @@ function App() {
                   setIsShopOpen(false);
                   setIsSellMode(false);
                   setPendingSale(null);
-                  setPendingSacrifice(null);
                   setVisibleDiscoveryId(null);
                   dispatch({ type: 'reset' });
                 }}
@@ -1206,69 +1209,6 @@ function App() {
                 }}
               >
                 Vender
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {pendingSacrifice && pendingSacrificeDefinition ? (
-        <div className="modalBackdrop" role="presentation">
-          <section
-            className="modal resetConfirm compactConfirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sacrifice-title"
-          >
-            <p className="modal__eyebrow">Portal rachado</p>
-            <h2 id="sacrifice-title">
-              {pendingSacrificeCreatureProductionAfter === 0
-                ? 'Última anomalia produtora'
-                : pendingSacrificeProductionAfter <= gameConfig.criticalProductionPerSecond
-                  ? 'Produção crítica'
-                  : 'Sacrificar anomalia?'}
-            </h2>
-            <p>{pendingSacrificeDefinition.name} será consumido permanentemente pelo portal.</p>
-            {pendingSacrificeCreatureProductionAfter === 0 ? (
-              <p className="warningText">
-                Sua produção das anomalias cairá para 0/s. Você dependerá da energia residual do
-                portal, dos ovos gratuitos e da reconstrução da colônia.
-              </p>
-            ) : pendingSacrificeProductionAfter <= gameConfig.criticalProductionPerSecond ? (
-              <p className="warningText">
-                Este sacrifício reduzirá sua produção para apenas{' '}
-                {formatCoins(pendingSacrificeProductionAfter)}/s. Reconstruir sua colônia poderá
-                levar algum tempo.
-              </p>
-            ) : (
-              <p className="warningText">
-                Sua produção cairá de {formatCoins(productionPerSecond)}/s para{' '}
-                {formatCoins(pendingSacrificeProductionAfter)}/s.
-              </p>
-            )}
-            <p className="sacrificeStats">
-              Energia recebida: +{formatCoins(pendingSacrificeEnergy)}
-              <br />
-              Perda de produção: {formatCoins(pendingSacrificeProductionLoss)}/s (
-              {Math.round(pendingSacrificeLossPercent)}%)
-            </p>
-            <div className="resetConfirm__actions">
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={() => setPendingSacrifice(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                className="dangerButton"
-                type="button"
-                onClick={() => {
-                  dispatch({ type: 'sacrifice', instanceId: pendingSacrifice.instanceId });
-                  setPendingSacrifice(null);
-                }}
-              >
-                {pendingSacrificeCreatureProductionAfter === 0 ? 'Sacrificar mesmo assim' : 'Sacrificar'}
               </button>
             </div>
           </section>

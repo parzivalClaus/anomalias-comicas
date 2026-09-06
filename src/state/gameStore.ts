@@ -20,6 +20,11 @@ import {
   getSellValue,
   getTotalProductionPerSecond,
 } from '../utils/economy';
+import {
+  advancePortalRequestCooldown,
+  isFinalMapOneNaturalMergeResult,
+  startPortalRequest,
+} from '../utils/portalRequests';
 import type { SoundCueType } from '../utils/sound';
 import { logSaveDebug } from '../utils/saveDebug';
 
@@ -36,7 +41,7 @@ export type GameAction =
   | { type: 'buyEgg' }
   | { type: 'buyCreatureEgg'; creatureId: CreatureId }
   | { type: 'sell'; instanceId: string }
-  | { type: 'sacrifice'; instanceId: string }
+  | { type: 'deliverPortalRequest'; instanceId: string }
   | { type: 'move'; instanceId: string; x: number; y: number }
   | { type: 'moveEgg'; eggId: string; x: number; y: number }
   | { type: 'openEgg'; eggId: string }
@@ -238,6 +243,11 @@ export function getInitialState(): GameState {
     portalState: 'dormant',
     portalEnergy: 0,
     portalEnergyRequired: gameConfig.portalEnergyRequired,
+    portalRequestState: null,
+    activePortalRequest: null,
+    portalRequestCooldownStartedAt: null,
+    lastRequestedTier: null,
+    sameTierRequestStreak: 0,
     unlockedMapIds: ['map1'],
     currentMapId: 'map1',
     remainingEggSpawnSeconds: gameConfig.cosmicEggSpawnSeconds,
@@ -502,31 +512,60 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       };
     }
 
-    case 'sacrifice': {
+    case 'deliverPortalRequest': {
       const creature = model.state.creatures.find((item) => item.instanceId === action.instanceId);
-      if (!creature || model.state.portalState !== 'cracked') return model;
+      const request = model.state.activePortalRequest;
+      if (!creature || model.state.portalState !== 'cracked' || model.state.portalRequestState !== 'active' || !request) {
+        return {
+          ...model,
+          toast:
+            model.state.portalState === 'charged'
+              ? 'O portal já está estabilizado.'
+              : 'O portal não está pedindo nada agora.',
+          soundCue: createSoundCue('invalid'),
+        };
+      }
 
-      const gainedEnergy = creatureDefinitions[creature.creatureId].portalEnergyValue;
+      if (creature.creatureId !== request.creatureId) {
+        return {
+          ...model,
+          toast: 'O portal rejeitou essa anomalia.',
+          soundCue: createSoundCue('invalid'),
+        };
+      }
+
+      const deliveredCount = request.deliveredCount + 1;
+      const completed = deliveredCount >= request.requiredCount;
+      const gainedEnergy = completed ? request.energyReward : 0;
       const nextEnergy = Math.min(
         model.state.portalEnergy + gainedEnergy,
         model.state.portalEnergyRequired,
       );
-      const portalActivated =
-        model.state.portalState === 'cracked' && nextEnergy >= model.state.portalEnergyRequired;
+      const portalCharged = completed && nextEnergy >= model.state.portalEnergyRequired;
+      const nextRequest = completed
+        ? null
+        : {
+            ...request,
+            deliveredCount,
+          };
 
       return {
         ...model,
         portalPulseId: model.portalPulseId + 1,
         soundCue: createSoundCue('portalTransform'),
-        toast: portalActivated ? 'Portal ativo. Mapa 2 em breve...' : null,
+        toast: completed
+          ? portalCharged
+            ? 'O portal está estabilizado. Algo ainda falta.'
+            : `Pedido concluído. +${gainedEnergy} energia.`
+          : `${deliveredCount}/${request.requiredCount} entregue ao portal.`,
         state: {
           ...model.state,
           creatures: model.state.creatures.filter((item) => item.instanceId !== action.instanceId),
           portalEnergy: nextEnergy,
-          portalState: portalActivated ? 'active' : model.state.portalState,
-          unlockedMapIds: portalActivated
-            ? Array.from(new Set([...model.state.unlockedMapIds, 'map2']))
-            : model.state.unlockedMapIds,
+          portalState: portalCharged ? 'charged' : model.state.portalState,
+          portalRequestState: completed ? (portalCharged ? 'charged' : 'cooldown') : 'active',
+          activePortalRequest: nextRequest,
+          portalRequestCooldownStartedAt: completed && !portalCharged ? Date.now() : null,
           lastSavedAt: Date.now(),
         },
       };
@@ -550,7 +589,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         action.sourceInstanceId,
       ]);
 
-      const nextState = updateHighestIncome({
+      const stateWithTransform = {
         ...stateAfterCollection,
         creatures: [
           ...stateAfterCollection.creatures,
@@ -564,7 +603,10 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           : model.state.hasSeenPortalReaction,
         portalState: shouldCrackPortal ? 'cracked' : model.state.portalState,
         lastSavedAt: Date.now(),
-      });
+      };
+      const nextState = updateHighestIncome(
+        shouldCrackPortal ? startPortalRequest(stateWithTransform) : stateWithTransform,
+      );
 
       return {
         ...model,
@@ -584,6 +626,9 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       const alreadyDiscovered = model.state.discoveredCreatureIds.includes(action.resultCreatureId);
       const nextCreature = createInstance(action.resultCreatureId, { x: action.x, y: action.y });
       const shouldPulsePortal = action.resultCreatureId === 'umbrelume';
+      const shouldUnlockMap2 =
+        isFinalMapOneNaturalMergeResult(action.resultCreatureId) &&
+        model.state.portalState === 'charged';
       const stateAfterCollection = removeCreatures(model.state, [
         action.sourceInstanceId,
         action.targetInstanceId,
@@ -600,14 +645,28 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           : model.state.hasSeenPortalReaction,
         hasCompletedFirstMergeTutorial: true,
         guidedTutorialStep: 'done',
+        portalState: shouldUnlockMap2 ? 'active' : stateAfterCollection.portalState,
+        portalRequestState: shouldUnlockMap2 ? null : stateAfterCollection.portalRequestState,
+        activePortalRequest: shouldUnlockMap2 ? null : stateAfterCollection.activePortalRequest,
+        portalRequestCooldownStartedAt: shouldUnlockMap2
+          ? null
+          : stateAfterCollection.portalRequestCooldownStartedAt,
+        unlockedMapIds: shouldUnlockMap2
+          ? Array.from(new Set([...stateAfterCollection.unlockedMapIds, 'map2']))
+          : stateAfterCollection.unlockedMapIds,
         lastSavedAt: Date.now(),
       });
 
       return {
         ...model,
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.resultCreatureId,
-        toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
-        portalPulseId: shouldPulsePortal ? model.portalPulseId + 1 : model.portalPulseId,
+        toast: shouldUnlockMap2
+          ? 'A anomalia atravessou o portal. Mapa 2 desbloqueado.'
+          : alreadyDiscovered
+            ? null
+            : 'Nova anomalia descoberta!',
+        portalPulseId:
+          shouldPulsePortal || shouldUnlockMap2 ? model.portalPulseId + 1 : model.portalPulseId,
         soundCue: createSoundCue('merge'),
         state: nextState,
       };
@@ -709,7 +768,8 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           : model.state.eggs;
       const spawnedEgg = nextEggs.length !== model.state.eggs.length;
       const missedEgg = shouldResolveEggCycle && !spawnedEgg;
-      const creaturesWithProduction = model.state.creatures.map((creature) => {
+      const stateAfterPortalCooldown = advancePortalRequestCooldown(model.state);
+      const creaturesWithProduction = stateAfterPortalCooldown.creatures.map((creature) => {
         const isMovementPaused = creature.instanceId === action.pausedCreatureInstanceId;
         const nextX = isMovementPaused ? creature.x : creature.x + creature.velocityX * elapsedSeconds;
         const nextY = isMovementPaused ? creature.y : creature.y + creature.velocityY * elapsedSeconds;
@@ -746,6 +806,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
             : model.toast,
         state: updateHighestIncome({
           ...model.state,
+          ...stateAfterPortalCooldown,
           coins: model.state.coins + creatureIncome + residualIncome,
           creatures: creaturesWithProduction,
           eggs: nextEggs,

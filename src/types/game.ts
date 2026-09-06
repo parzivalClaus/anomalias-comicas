@@ -9,7 +9,8 @@ export type CreatureId =
 export type EvolutionConditionType = 'portal_influence';
 export type EnvironmentId = 'portal';
 export type ProgressionType = 'natural' | 'environmental';
-export type PortalState = 'dormant' | 'cracked' | 'active';
+export type PortalState = 'dormant' | 'cracked' | 'charged' | 'active';
+export type PortalRequestState = 'active' | 'cooldown' | 'charged';
 export type MapId = 'map1' | 'map2';
 export type EggSource = 'free' | 'purchased';
 export type SaveOwnerType = 'guest' | 'account';
@@ -62,6 +63,15 @@ export interface EggHatchConfig {
   weights?: Partial<Record<CreatureId, number>>;
 }
 
+export interface PortalRequest {
+  id: string;
+  creatureId: CreatureId;
+  requestedTier: number;
+  requiredCount: number;
+  deliveredCount: number;
+  energyReward: number;
+}
+
 export interface CreatureInstance {
   instanceId: string;
   creatureId: CreatureId;
@@ -102,6 +112,11 @@ export interface GameState {
   portalState: PortalState;
   portalEnergy: number;
   portalEnergyRequired: number;
+  portalRequestState: PortalRequestState | null;
+  activePortalRequest: PortalRequest | null;
+  portalRequestCooldownStartedAt: number | null;
+  lastRequestedTier: number | null;
+  sameTierRequestStreak: number;
   unlockedMapIds: MapId[];
   currentMapId: MapId;
   remainingEggSpawnSeconds: number;
@@ -115,7 +130,7 @@ export interface OfflineReward {
 }
 
 export interface VersionedGameSave {
-  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
   state: GameState;
   updatedAt: string;
   ownerType: SaveOwnerType;
