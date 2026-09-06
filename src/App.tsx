@@ -21,7 +21,6 @@ import {
   formatCoins,
   getProductionPerSecond,
   getSellValue,
-  getStoreCreatureOptions,
   getTotalProductionPerSecond,
 } from './utils/economy';
 import { evaluateEnvironmentalTransformation } from './utils/environmentalTransform';
@@ -124,12 +123,6 @@ function App() {
   const occupiedEntities = model.state.creatures.length + model.state.eggs.length;
   const isBoardFull = occupiedEntities >= gameConfig.maxWorldEntities;
   const guidedTutorialStep = model.state.guidedTutorialStep;
-  const canOpenShopForPurchase =
-    !isBoardFull &&
-    (guidedTutorialStep === 'buyEgg' || guidedTutorialStep === 'done') &&
-    getStoreCreatureOptions(model.state).some(
-      (option) => option.isUnlocked && model.state.coins >= option.price,
-    );
   const eggTimerSeconds = model.state.remainingEggSpawnSeconds;
   const mergeTutorialHint = model.state.hasCompletedFirstMergeTutorial
     ? null
@@ -314,17 +307,37 @@ function App() {
       .sort((a, b) => a.order - b.order)
       .slice(0, gameConfig.maxProductionBurstsPerTick)
       .map(({ creature }) => creature);
-    const burstEntries = visibleCreatures.map((creature) => {
+    const timeouts: number[] = [];
+
+    for (const creature of visibleCreatures) {
       const amount = Math.floor(creatureDefinitions[creature.creatureId].coinsPerSecond);
-      return [creature.instanceId, { id: Date.now() + creature.birthId, amount }] as const;
-    });
+      const burstId = Date.now() + creature.birthId;
+      const visualDelay = (creature.birthId * 37 + model.productionPulseId * 113) % 760;
 
-    setCollectionBursts(Object.fromEntries(burstEntries));
-    const timeout = window.setTimeout(() => {
-      setCollectionBursts({});
-    }, 820);
+      timeouts.push(
+        window.setTimeout(() => {
+          setCollectionBursts((current) => ({
+            ...current,
+            [creature.instanceId]: { id: burstId, amount },
+          }));
+        }, visualDelay),
+      );
 
-    return () => window.clearTimeout(timeout);
+      timeouts.push(
+        window.setTimeout(() => {
+          setCollectionBursts((current) => {
+            if (current[creature.instanceId]?.id !== burstId) return current;
+            const next = { ...current };
+            delete next[creature.instanceId];
+            return next;
+          });
+        }, visualDelay + 780),
+      );
+    }
+
+    return () => {
+      for (const timeout of timeouts) window.clearTimeout(timeout);
+    };
   }, [model.productionPulseId, model.state.creatures]);
 
   useEffect(() => {
@@ -945,9 +958,11 @@ function App() {
 
         <div className="actionBar">
           <BuyCreatureButton
-            disabled={!canOpenShopForPurchase}
             isHighlighted={guidedTutorialStep === 'buyEgg'}
-            onBuy={() => setIsShopOpen(true)}
+            onBuy={() => {
+              if (guidedTutorialStep !== 'done' && guidedTutorialStep !== 'buyEgg') return;
+              setIsShopOpen(true);
+            }}
           />
         </div>
 
