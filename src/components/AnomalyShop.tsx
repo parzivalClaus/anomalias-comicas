@@ -1,4 +1,4 @@
-import { Lock, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import cosmicEggImage from '../assets/ui/ovo-cosmico.png';
 import type { CreatureId, GameState } from '../types/game';
 import { formatCoins, getStoreCreatureOptions } from '../utils/economy';
@@ -20,7 +20,7 @@ export function AnomalyShop({
   onBuyCreatureEgg,
   onClose,
 }: AnomalyShopProps) {
-  const options = getStoreCreatureOptions(state);
+  const options = getStoreCreatureOptions(state).filter((option) => option.isUnlocked);
 
   return (
     <div className="shopBackdrop" role="presentation" onClick={onClose}>
@@ -43,14 +43,13 @@ export function AnomalyShop({
         </div>
 
         <div className="shopList">
-          {options.map(({ definition, isUnlocked, price, purchaseCount, requiredTier }) => {
-            const canBuy = isUnlocked && !isFull && coins >= price;
+          {options.map(({ definition, price, purchaseCount }) => {
+            const canBuy = !isFull && coins >= price;
 
             return (
               <article
                 className={[
                   'shopItem',
-                  !isUnlocked ? 'shopItem--locked' : '',
                   tutorialCreatureId === definition.id ? 'shopItem--tutorialHint' : '',
                 ].join(' ')}
                 key={definition.id}
@@ -60,9 +59,9 @@ export function AnomalyShop({
                   <img className="shopItem__egg" src={cosmicEggImage} alt="" />
                 </div>
                 <div className="shopItem__info">
-                  <p>{isUnlocked ? `Comprados: ${purchaseCount}` : `Descubra T${requiredTier}`}</p>
+                  <p>Comprados: {purchaseCount}</p>
                   <h3>{definition.name}</h3>
-                  <span>{isUnlocked ? 'Nasce ao abrir um Ovo Cósmico' : 'Bloqueado na loja'}</span>
+                  <span>Nasce ao abrir um Ovo Cósmico</span>
                 </div>
                 <button
                   className="shopItem__buy"
@@ -70,13 +69,7 @@ export function AnomalyShop({
                   disabled={!canBuy}
                   onClick={() => onBuyCreatureEgg(definition.id)}
                 >
-                  {isUnlocked ? (
-                    <span>{formatCoins(price)}</span>
-                  ) : (
-                    <span>
-                      <Lock size={14} aria-hidden="true" />
-                    </span>
-                  )}
+                  <span>{formatCoins(price)}</span>
                 </button>
               </article>
             );

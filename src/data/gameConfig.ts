@@ -23,7 +23,7 @@ export const ECONOMY_BALANCE = {
   portalResidualIncomePerSecond: 1,
   portalSacrificeWarningPercent: 10,
   portalRequests: {
-    cooldownSeconds: 45,
+    cooldownSeconds: 120,
     requestTierGap: 4,
     tierWeightDecay: 0.6,
     maxSameTierStreak: 3,
