@@ -6,8 +6,10 @@ import { evaluateMerge } from './merge';
 export interface MergeTutorialHint {
   sourceInstanceId: string;
   targetInstanceId: string;
-  sourceSlotIndex: number;
-  targetSlotIndex: number;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
 }
 
 export interface EnvironmentalHint {
@@ -29,8 +31,10 @@ export function findMergeTutorialHint(creatures: CreatureInstance[]): MergeTutor
       return {
         sourceInstanceId: source.instanceId,
         targetInstanceId: target.instanceId,
-        sourceSlotIndex: source.slotIndex,
-        targetSlotIndex: target.slotIndex,
+        sourceX: source.x,
+        sourceY: source.y,
+        targetX: target.x,
+        targetY: target.y,
       };
     }
   }

@@ -1,8 +1,14 @@
 import { gameConfig } from '../data/gameConfig';
-import type { GameState, SaveOwnerType, VersionedGameSave } from '../types/game';
+import type {
+  CreatureId,
+  GameState,
+  GuidedTutorialStep,
+  SaveOwnerType,
+  VersionedGameSave,
+} from '../types/game';
 import { decayEggPurchasePressure, getEggPurchasePrice, getTotalProductionPerSecond } from '../utils/economy';
 
-export const currentSaveVersion = 8;
+export const currentSaveVersion = 10;
 
 function isGameState(value: unknown): value is GameState {
   if (!value || typeof value !== 'object') return false;
@@ -16,57 +22,89 @@ function isGameState(value: unknown): value is GameState {
   );
 }
 
-function normalizeBoardOccupancy(state: GameState) {
-  const occupiedSlots = new Set<number>();
-  const getNextSlot = () => {
-    for (let index = 0; index < gameConfig.boardSlots; index += 1) {
-      if (!occupiedSlots.has(index)) {
-        occupiedSlots.add(index);
-        return index;
-      }
-    }
-
-    return null;
+function clampWorldPosition(x: number, y: number) {
+  return {
+    x: Math.min(0.94, Math.max(0.06, Number.isFinite(x) ? x : 0.5)),
+    y: Math.min(0.92, Math.max(0.08, Number.isFinite(y) ? y : 0.5)),
   };
+}
 
+function slotToWorldPosition(slotIndex: number) {
+  const safeSlot = Number.isFinite(slotIndex) ? slotIndex : 0;
+  const row = Math.floor(safeSlot / gameConfig.boardColumns);
+  const column = safeSlot % gameConfig.boardColumns;
+  return clampWorldPosition(
+    0.14 + (column / Math.max(1, gameConfig.boardColumns - 1)) * 0.72,
+    0.14 + (row / Math.max(1, gameConfig.boardRows - 1)) * 0.72,
+  );
+}
+
+function normalizeEntityPosition(entity: { x?: number; y?: number; slotIndex?: number }) {
+  if (typeof entity.x === 'number' && typeof entity.y === 'number') {
+    return clampWorldPosition(entity.x, entity.y);
+  }
+
+  return slotToWorldPosition(entity.slotIndex ?? 0);
+}
+
+function isCreatureId(value: unknown): value is CreatureId {
+  return (
+    value === 'nebulo' ||
+    value === 'nebulume' ||
+    value === 'nebulux' ||
+    value === 'umbrelume' ||
+    value === 'neburix' ||
+    value === 'gravulon' ||
+    value === 'singulume'
+  );
+}
+
+function isGuidedTutorialStep(value: unknown): value is GuidedTutorialStep {
+  return (
+    value === 'openFirstEgg' ||
+    value === 'buyEgg' ||
+    value === 'openSecondEgg' ||
+    value === 'merge' ||
+    value === 'done'
+  );
+}
+
+function getVelocity(seed: number) {
+  const angle = ((seed % 360) / 360) * Math.PI * 2;
+  const speed = 0.0025 + (seed % 5) * 0.00035;
+
+  return {
+    velocityX: Math.cos(angle) * speed,
+    velocityY: Math.sin(angle) * speed * 0.7,
+  };
+}
+
+function normalizeWorldEntities(state: GameState) {
   const creatures = (state.creatures ?? [])
-    .map((creature) => {
-      const slotIndex =
-        creature.slotIndex >= 0 &&
-        creature.slotIndex < gameConfig.boardSlots &&
-        !occupiedSlots.has(creature.slotIndex)
-          ? creature.slotIndex
-          : getNextSlot();
-
-      if (slotIndex === null) return null;
-      occupiedSlots.add(slotIndex);
+    .slice(0, gameConfig.maxWorldEntities)
+    .map((creature, index) => {
+      const legacyCreature = creature as typeof creature & { pendingCoins?: number };
+      const { pendingCoins: _pendingCoins, ...rest } = legacyCreature;
 
       return {
-        ...creature,
-        slotIndex,
-        pendingCoins: creature.pendingCoins ?? 0,
+        ...rest,
+        ...normalizeEntityPosition(creature),
+        velocityX: creature.velocityX ?? getVelocity(creature.birthId ?? index).velocityX,
+        velocityY: creature.velocityY ?? getVelocity(creature.birthId ?? index).velocityY,
+        birthId: creature.birthId ?? Date.now() + index,
       };
-    })
-    .filter((creature): creature is GameState['creatures'][number] => creature !== null);
+    });
 
+  const remainingCapacity = Math.max(0, gameConfig.maxWorldEntities - creatures.length);
   const eggs = (state.eggs ?? [])
-    .map((egg) => {
-      const slotIndex =
-        egg.slotIndex >= 0 &&
-        egg.slotIndex < gameConfig.boardSlots &&
-        !occupiedSlots.has(egg.slotIndex)
-          ? egg.slotIndex
-          : getNextSlot();
-
-      if (slotIndex === null) return null;
-      occupiedSlots.add(slotIndex);
-
-      return {
-        ...egg,
-        slotIndex,
-      };
-    })
-    .filter((egg): egg is GameState['eggs'][number] => egg !== null);
+    .slice(0, remainingCapacity)
+    .map((egg, index) => ({
+      ...egg,
+      ...normalizeEntityPosition(egg),
+      birthId: egg.birthId ?? Date.now() + creatures.length + index,
+      source: egg.source ?? 'free',
+      contentCreatureId: isCreatureId(egg.contentCreatureId) ? egg.contentCreatureId : undefined,
+    }));
 
   return { creatures, eggs };
 }
@@ -76,7 +114,7 @@ function normalizeState(state: GameState): GameState {
     state.remainingEggSpawnSeconds ?? gameConfig.cosmicEggSpawnSeconds,
     gameConfig.cosmicEggSpawnSeconds,
   );
-  const occupancy = normalizeBoardOccupancy(state);
+  const occupancy = normalizeWorldEntities(state);
   const creatures = occupancy.creatures;
   const portalState =
     state.portalState ??
@@ -101,14 +139,7 @@ function normalizeState(state: GameState): GameState {
   return {
     ...state,
     creatures,
-    eggs: occupancy.eggs.map((egg) => ({
-      ...egg,
-      remainingIncubationSeconds: Math.min(
-        egg.remainingIncubationSeconds,
-        gameConfig.cosmicEggIncubationSeconds,
-      ),
-      source: egg.source ?? 'free',
-    })),
+    eggs: occupancy.eggs,
     purchaseCounts: state.purchaseCounts ?? {},
     purchasedEggCount: state.purchasedEggCount ?? 0,
     eggPurchasePressure,
@@ -121,6 +152,9 @@ function normalizeState(state: GameState): GameState {
     hasSeenCloudSavePrompt: state.hasSeenCloudSavePrompt ?? false,
     hasSeenPortalReaction: state.hasSeenPortalReaction ?? false,
     hasCompletedFirstMergeTutorial: state.hasCompletedFirstMergeTutorial ?? false,
+    guidedTutorialStep: isGuidedTutorialStep(state.guidedTutorialStep)
+      ? state.guidedTutorialStep
+      : 'done',
     portalState,
     portalEnergy: state.portalEnergy ?? 0,
     portalEnergyRequired: state.portalEnergyRequired ?? gameConfig.portalEnergyRequired,
@@ -155,7 +189,7 @@ export function migrateSave(value: unknown): VersionedGameSave | null {
 
   if ('saveVersion' in value && 'state' in value) {
     const versioned = value as VersionedGameSave;
-    if (![1, 2, 3, 4, 5, 6, 7, 8].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
       return null;
     }
 

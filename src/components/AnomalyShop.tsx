@@ -1,24 +1,26 @@
-import { X } from 'lucide-react';
+import { Lock, X } from 'lucide-react';
 import cosmicEggImage from '../assets/ui/ovo-cosmico.png';
-import { gameConfig } from '../data/gameConfig';
-import { formatCoins } from '../utils/economy';
-import type { GameState } from '../types/game';
+import type { CreatureId, GameState } from '../types/game';
+import { formatCoins, getStoreCreatureOptions } from '../utils/economy';
 
 interface AnomalyShopProps {
   coins: number;
+  isFull: boolean;
   state: GameState;
-  onBuyEgg: () => void;
+  tutorialCreatureId?: CreatureId | null;
+  onBuyCreatureEgg: (creatureId: CreatureId) => void;
   onClose: () => void;
 }
 
 export function AnomalyShop({
   coins,
+  isFull,
   state,
-  onBuyEgg,
+  tutorialCreatureId = null,
+  onBuyCreatureEgg,
   onClose,
 }: AnomalyShopProps) {
-  const price = state.currentEggPrice;
-  const canAfford = coins >= price;
+  const options = getStoreCreatureOptions(state);
 
   return (
     <div className="shopBackdrop" role="presentation" onClick={onClose}>
@@ -33,7 +35,7 @@ export function AnomalyShop({
         <div className="shopSheet__header">
           <div>
             <p className="modal__eyebrow">Loja de Anomalias</p>
-            <h2>Comprar Ovo</h2>
+            <h2>Ovos direcionados</h2>
           </div>
           <button className="iconButton" type="button" onClick={onClose} aria-label="Fechar loja">
             <X size={20} />
@@ -41,24 +43,44 @@ export function AnomalyShop({
         </div>
 
         <div className="shopList">
-          <article className="shopItem">
-            <div className="shopItem__portrait shopItem__portrait--egg">
-              <img src={cosmicEggImage} alt="" />
-            </div>
-            <div className="shopItem__info">
-              <p>Incubação {gameConfig.cosmicEggIncubationSeconds}s</p>
-              <h3>Ovo Cósmico</h3>
-              <span>Gera anomalia-base</span>
-            </div>
-            <button
-              className="shopItem__buy"
-              type="button"
-              disabled={!canAfford}
-              onClick={onBuyEgg}
-            >
-              <span>{formatCoins(price)}</span>
-            </button>
-          </article>
+          {options.map(({ definition, isUnlocked, price, purchaseCount, requiredTier }) => {
+            const canBuy = isUnlocked && !isFull && coins >= price;
+
+            return (
+              <article
+                className={[
+                  'shopItem',
+                  !isUnlocked ? 'shopItem--locked' : '',
+                  tutorialCreatureId === definition.id ? 'shopItem--tutorialHint' : '',
+                ].join(' ')}
+                key={definition.id}
+              >
+                <div className="shopItem__portrait">
+                  <img src={definition.image} alt="" />
+                  <img className="shopItem__egg" src={cosmicEggImage} alt="" />
+                </div>
+                <div className="shopItem__info">
+                  <p>{isUnlocked ? `Comprados: ${purchaseCount}` : `Descubra T${requiredTier}`}</p>
+                  <h3>{definition.name}</h3>
+                  <span>{isUnlocked ? 'Nasce ao abrir um Ovo Cósmico' : 'Bloqueado na loja'}</span>
+                </div>
+                <button
+                  className="shopItem__buy"
+                  type="button"
+                  disabled={!canBuy}
+                  onClick={() => onBuyCreatureEgg(definition.id)}
+                >
+                  {isUnlocked ? (
+                    <span>{formatCoins(price)}</span>
+                  ) : (
+                    <span>
+                      <Lock size={14} aria-hidden="true" />
+                    </span>
+                  )}
+                </button>
+              </article>
+            );
+          })}
         </div>
       </section>
     </div>

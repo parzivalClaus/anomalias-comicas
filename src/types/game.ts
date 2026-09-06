@@ -13,6 +13,7 @@ export type PortalState = 'dormant' | 'cracked' | 'active';
 export type MapId = 'map1' | 'map2';
 export type EggSource = 'free' | 'purchased';
 export type SaveOwnerType = 'guest' | 'account';
+export type GuidedTutorialStep = 'openFirstEgg' | 'buyEgg' | 'openSecondEgg' | 'merge' | 'done';
 
 export interface CreatureDefinition {
   id: CreatureId;
@@ -64,17 +65,22 @@ export interface EggHatchConfig {
 export interface CreatureInstance {
   instanceId: string;
   creatureId: CreatureId;
-  slotIndex: number;
+  slotIndex?: number;
+  x: number;
+  y: number;
+  velocityX: number;
+  velocityY: number;
   birthId: number;
-  pendingCoins: number;
 }
 
 export interface EggState {
   eggId: string;
-  slotIndex: number;
-  remainingIncubationSeconds: number;
+  slotIndex?: number;
+  x: number;
+  y: number;
   birthId: number;
   source: EggSource;
+  contentCreatureId?: CreatureId;
 }
 
 export interface GameState {
@@ -92,6 +98,7 @@ export interface GameState {
   hasSeenCloudSavePrompt: boolean;
   hasSeenPortalReaction: boolean;
   hasCompletedFirstMergeTutorial: boolean;
+  guidedTutorialStep: GuidedTutorialStep;
   portalState: PortalState;
   portalEnergy: number;
   portalEnergyRequired: number;
@@ -108,7 +115,7 @@ export interface OfflineReward {
 }
 
 export interface VersionedGameSave {
-  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   state: GameState;
   updatedAt: string;
   ownerType: SaveOwnerType;

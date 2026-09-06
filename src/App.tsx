@@ -1,8 +1,7 @@
-import { Cloud, RotateCcw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import cosmicEggImage from './assets/ui/ovo-cosmico.png';
+import { Cloud, RotateCcw } from 'lucide-react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { AccountButton } from './components/AccountButton';
-// import { AnomalyShop } from './components/AnomalyShop';
+import { AnomalyShop } from './components/AnomalyShop';
 import { BuyCreatureButton } from './components/BuyCreatureButton';
 import { CoinHud } from './components/CoinHud';
 import { Dex } from './components/Dex';
@@ -22,6 +21,7 @@ import {
   formatCoins,
   getProductionPerSecond,
   getSellValue,
+  getStoreCreatureOptions,
   getTotalProductionPerSecond,
 } from './utils/economy';
 import { evaluateEnvironmentalTransformation } from './utils/environmentalTransform';
@@ -60,11 +60,30 @@ function preloadImage(src: string) {
   image.src = src;
 }
 
+function clampWorldCoordinate(value: number) {
+  if (!Number.isFinite(value)) return 0.5;
+  return Math.min(0.94, Math.max(0.06, value));
+}
+
+function getWorldPositionFromPoint(clientX: number, clientY: number) {
+  const field = document.querySelector<HTMLElement>('[data-world-field]');
+  if (!field) return null;
+
+  const rect = field.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+
+  return {
+    x: clampWorldCoordinate((clientX - rect.left) / rect.width),
+    y: clampWorldCoordinate((clientY - rect.top) / rect.height),
+  };
+}
+
 function App() {
   const initial = useInitialGameModel();
   const [model, dispatch] = useReducer(reducer, initial.model);
   const [dragState, setDragState] = useState<DragState>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
+  const [isShopOpen, setIsShopOpen] = useState(false);
   const [hasChosenGuestSession, setHasChosenGuestSession] = useState(false);
   const [isInitialAuthSigningIn, setIsInitialAuthSigningIn] = useState(false);
   const [isCloudSavePromptOpen, setIsCloudSavePromptOpen] = useState(false);
@@ -94,34 +113,58 @@ function App() {
   const [collectionBursts, setCollectionBursts] = useState<
     Record<string, { id: number; amount: number }>
   >({});
-  const recentlyCollectedCreatureIds = useRef(new Set<string>());
+  const [openingEggIds, setOpeningEggIds] = useState<string[]>([]);
   const hasCalculatedOfflineRewardRef = useRef(false);
   const shouldSaveOfflineCollectionRef = useRef(false);
   const hasClaimedOfflineRewardRef = useRef(false);
+  const lastRenderedProductionPulseRef = useRef(model.productionPulseId);
 
   const creatureProductionPerSecond = getProductionPerSecond(model.state.creatures);
   const productionPerSecond = getTotalProductionPerSecond(model.state);
-  const occupiedSlots = model.state.creatures.length + model.state.eggs.length;
-  const isBoardFull = occupiedSlots >= gameConfig.boardSlots;
-  const eggPrice = model.state.currentEggPrice;
-  const canBuyEgg = !isBoardFull && model.state.coins >= eggPrice;
+  const occupiedEntities = model.state.creatures.length + model.state.eggs.length;
+  const isBoardFull = occupiedEntities >= gameConfig.maxWorldEntities;
+  const guidedTutorialStep = model.state.guidedTutorialStep;
+  const canOpenShopForPurchase =
+    !isBoardFull &&
+    (guidedTutorialStep === 'buyEgg' || guidedTutorialStep === 'done') &&
+    getStoreCreatureOptions(model.state).some(
+      (option) => option.isUnlocked && model.state.coins >= option.price,
+    );
   const eggTimerSeconds = model.state.remainingEggSpawnSeconds;
   const mergeTutorialHint = model.state.hasCompletedFirstMergeTutorial
     ? null
     : findMergeTutorialHint(model.state.creatures);
   const mergeHintInstanceIds =
-    mergeTutorialHint && mergeTutorialPhase !== 'idle'
+    mergeTutorialHint && (mergeTutorialPhase !== 'idle' || guidedTutorialStep === 'merge')
       ? [mergeTutorialHint.sourceInstanceId, mergeTutorialHint.targetInstanceId]
       : [];
+  const draggedCreatureForHints =
+    dragState?.kind === 'creature'
+      ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
+      : null;
+  const dragMergeTargetIds = draggedCreatureForHints
+    ? model.state.creatures
+        .filter(
+          (creature) =>
+            creature.instanceId !== draggedCreatureForHints.instanceId &&
+            evaluateMerge(draggedCreatureForHints, creature).status === 'success',
+        )
+        .map((creature) => creature.instanceId)
+    : [];
   const mergeGestureHint =
-    mergeTutorialHint && mergeTutorialPhase === 'gesture'
+    mergeTutorialHint && (mergeTutorialPhase === 'gesture' || guidedTutorialStep === 'merge')
       ? {
-          sourceSlotIndex: mergeTutorialHint.sourceSlotIndex,
-          targetSlotIndex: mergeTutorialHint.targetSlotIndex,
+          sourceX: mergeTutorialHint.sourceX,
+          sourceY: mergeTutorialHint.sourceY,
+          targetX: mergeTutorialHint.targetX,
+          targetY: mergeTutorialHint.targetY,
         }
       : null;
+  const dragWorldPosition = dragState
+    ? getWorldPositionFromPoint(dragState.pointerX, dragState.pointerY)
+    : null;
   const environmentalHintSignature = model.state.creatures
-    .map((creature) => `${creature.instanceId}:${creature.creatureId}:${creature.slotIndex}`)
+    .map((creature) => `${creature.instanceId}:${creature.creatureId}`)
     .sort()
     .join('|');
   const portalProgress =
@@ -211,14 +254,36 @@ function App() {
     hasPlayedEnoughForCloudPrompt;
   const hasBlockingModal =
     isDexOpen ||
+    isShopOpen ||
+    !model.state.hasSeenWelcomeModal ||
     isResetConfirmOpen ||
     Boolean(pendingSale) ||
     Boolean(pendingSacrifice) ||
     isMapPreviewOpen ||
     Boolean(visibleDiscoveryId) ||
     Boolean(initial.offlineReward);
+  const highlightedTutorialEggIds =
+    guidedTutorialStep === 'openFirstEgg'
+      ? model.state.eggs.slice(0, 1).map((egg) => egg.eggId)
+      : guidedTutorialStep === 'openSecondEgg'
+        ? model.state.eggs.filter((egg) => egg.source === 'purchased').map((egg) => egg.eggId)
+        : [];
+  const tutorialMessage =
+    guidedTutorialStep === 'openFirstEgg'
+      ? 'Toque no Ovo Cósmico para revelar sua primeira anomalia.'
+      : guidedTutorialStep === 'buyEgg'
+        ? 'Use suas moedas para comprar outro ovo.'
+        : guidedTutorialStep === 'openSecondEgg'
+          ? 'Toque no novo ovo para revelar outra anomalia.'
+          : guidedTutorialStep === 'merge'
+            ? 'Arraste uma anomalia sobre a outra para combinar.'
+            : null;
 
-  useGameLoop(dispatch, !isGameplayLocked);
+  useGameLoop(
+    dispatch,
+    !isGameplayLocked,
+    dragState?.kind === 'creature' ? dragState.instanceId : null,
+  );
   useAutosave(
     model.state,
     !isGameplayLocked && hasResolvedInitialSync && !initial.offlineReward,
@@ -230,6 +295,37 @@ function App() {
 
     playSoundCue(model.soundCue.type);
   }, [model.soundCue]);
+
+  useEffect(() => {
+    if (model.productionPulseId === lastRenderedProductionPulseRef.current) return;
+    lastRenderedProductionPulseRef.current = model.productionPulseId;
+    if (model.productionPulseId <= 0) return;
+
+    const productiveCreatures = model.state.creatures.filter(
+      (creature) => creatureDefinitions[creature.creatureId].coinsPerSecond > 0,
+    );
+    if (productiveCreatures.length === 0) return;
+
+    const visibleCreatures = productiveCreatures
+      .map((creature) => ({
+        creature,
+        order: (creature.birthId + model.productionPulseId * 17) % 997,
+      }))
+      .sort((a, b) => a.order - b.order)
+      .slice(0, gameConfig.maxProductionBurstsPerTick)
+      .map(({ creature }) => creature);
+    const burstEntries = visibleCreatures.map((creature) => {
+      const amount = Math.floor(creatureDefinitions[creature.creatureId].coinsPerSecond);
+      return [creature.instanceId, { id: Date.now() + creature.birthId, amount }] as const;
+    });
+
+    setCollectionBursts(Object.fromEntries(burstEntries));
+    const timeout = window.setTimeout(() => {
+      setCollectionBursts({});
+    }, 820);
+
+    return () => window.clearTimeout(timeout);
+  }, [model.productionPulseId, model.state.creatures]);
 
   useEffect(() => {
     requestPortraitOrientationLock();
@@ -334,39 +430,6 @@ function App() {
     }
   }
 
-  const collectCreatureCoins = useCallback(
-    (instanceId: string) => {
-      if (recentlyCollectedCreatureIds.current.has(instanceId)) return;
-
-      const creature = model.state.creatures.find((item) => item.instanceId === instanceId);
-      const amount = Math.floor(creature?.pendingCoins ?? 0);
-
-      if (!creature || amount <= 0) return;
-
-      recentlyCollectedCreatureIds.current.add(instanceId);
-      window.setTimeout(() => {
-        recentlyCollectedCreatureIds.current.delete(instanceId);
-      }, 120);
-
-      const burstId = Date.now() + creature.birthId;
-      setCollectionBursts((current) => ({
-        ...current,
-        [instanceId]: { id: burstId, amount },
-      }));
-      window.setTimeout(() => {
-        setCollectionBursts((current) => {
-          if (current[instanceId]?.id !== burstId) return current;
-          const next = { ...current };
-          delete next[instanceId];
-          return next;
-        });
-      }, 780);
-
-      dispatch({ type: 'collectCreatureCoins', instanceId });
-    },
-    [model.state.creatures],
-  );
-
   function handleCreaturePointerDown(
     creature: CreatureInstance,
     event: React.PointerEvent<HTMLButtonElement>,
@@ -379,29 +442,37 @@ function App() {
       return;
     }
 
-    collectCreatureCoins(creature.instanceId);
-
     setDragState({
       kind: 'creature',
       instanceId: creature.instanceId,
-      fromSlotIndex: creature.slotIndex,
+      startPointerX: event.clientX,
+      startPointerY: event.clientY,
       pointerX: event.clientX,
       pointerY: event.clientY,
     });
   }
 
   function handleEggPointerDown(egg: EggState, event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
     recordInteraction();
-    setDragState({
-      kind: 'egg',
-      instanceId: egg.eggId,
-      fromSlotIndex: egg.slotIndex,
-      pointerX: event.clientX,
-      pointerY: event.clientY,
-    });
+    openEggWithAnimation(egg.eggId);
   }
 
-  function handleDropOnSlot(slotIndex: number, burstPoint?: { x: number; y: number }) {
+  function openEggWithAnimation(eggId: string) {
+    if (openingEggIds.includes(eggId)) return;
+
+    setOpeningEggIds((current) => [...current, eggId]);
+    window.setTimeout(() => {
+      dispatch({ type: 'openEgg', eggId });
+      setOpeningEggIds((current) => current.filter((item) => item !== eggId));
+    }, 560);
+  }
+
+  function handleDropInWorld(
+    position: { x: number; y: number },
+    targetInstanceId?: string,
+    burstPoint?: { x: number; y: number },
+  ) {
     if (!dragState) return;
     recordInteraction();
 
@@ -409,56 +480,17 @@ function App() {
       dragState.kind === 'creature'
         ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
         : null;
-    const draggedEgg =
-      dragState.kind === 'egg'
-        ? model.state.eggs.find((egg) => egg.eggId === dragState.instanceId)
-        : null;
-    const target = model.state.creatures.find((creature) => creature.slotIndex === slotIndex);
-    const targetEgg = model.state.eggs.find((egg) => egg.slotIndex === slotIndex);
+    const target = targetInstanceId
+      ? model.state.creatures.find((creature) => creature.instanceId === targetInstanceId)
+      : null;
 
     setDragState(null);
 
-    if (draggedEgg) {
-      if (draggedEgg.slotIndex === slotIndex) return;
-
-      if (!target && !targetEgg) {
-        dispatch({ type: 'moveEgg', eggId: draggedEgg.eggId, toSlotIndex: slotIndex });
-        return;
-      }
-
-      if (targetEgg) {
-        dispatch({ type: 'swapEggs', sourceEggId: draggedEgg.eggId, targetEggId: targetEgg.eggId });
-        return;
-      }
-
-      if (target) {
-        dispatch({
-          type: 'swapCreatureWithEgg',
-          creatureInstanceId: target.instanceId,
-          eggId: draggedEgg.eggId,
-        });
-      }
-
+    if (!dragged) return;
+    if (!target || target.instanceId === dragged.instanceId) {
+      dispatch({ type: 'move', instanceId: dragged.instanceId, x: position.x, y: position.y });
       return;
     }
-
-    if (!dragged || dragged.slotIndex === slotIndex) return;
-
-    if (!target && !targetEgg) {
-      dispatch({ type: 'move', instanceId: dragged.instanceId, toSlotIndex: slotIndex });
-      return;
-    }
-
-    if (targetEgg) {
-      dispatch({
-        type: 'swapCreatureWithEgg',
-        creatureInstanceId: dragged.instanceId,
-        eggId: targetEgg.eggId,
-      });
-      return;
-    }
-
-    if (!target) return;
 
     const merge = evaluateMerge(dragged, target);
     if (merge.status === 'success') {
@@ -478,7 +510,8 @@ function App() {
         sourceInstanceId: dragged.instanceId,
         targetInstanceId: target.instanceId,
         resultCreatureId: merge.resultCreatureId,
-        targetSlotIndex: slotIndex,
+        x: target.x,
+        y: target.y,
       });
       return;
     }
@@ -488,11 +521,7 @@ function App() {
       return;
     }
 
-    dispatch({
-      type: 'swap',
-      sourceInstanceId: dragged.instanceId,
-      targetInstanceId: target.instanceId,
-    });
+    dispatch({ type: 'move', instanceId: dragged.instanceId, x: position.x, y: position.y });
   }
 
   function handleDropOnEnvironment(environmentId: EnvironmentId) {
@@ -555,6 +584,7 @@ function App() {
 
   useEffect(() => {
     if (!dragState) return;
+    const activeDragState = dragState;
 
     function handleWindowPointerMove(event: PointerEvent) {
       setDragState((current) =>
@@ -579,21 +609,37 @@ function App() {
         return;
       }
 
-      const slot = elements
-        .map((element) => element.closest<HTMLElement>('[data-slot-index]'))
-        .find(Boolean);
-
-      if (!slot?.dataset.slotIndex) {
+      const worldPosition = getWorldPositionFromPoint(event.clientX, event.clientY);
+      if (!worldPosition) {
         setDragState(null);
         return;
       }
 
-      const slotRect = slot.getBoundingClientRect();
+      const draggedCreatureId =
+        activeDragState.kind === 'creature' ? activeDragState.instanceId : null;
+      const targetCreature = elements
+        .map((element) => element.closest<HTMLElement>('[data-creature-instance-id]'))
+        .find(
+          (element) =>
+            element?.dataset.creatureInstanceId &&
+            element.dataset.creatureInstanceId !== draggedCreatureId,
+        );
+      const targetInstanceId = targetCreature?.dataset.creatureInstanceId;
+      const targetRect = targetCreature?.getBoundingClientRect();
 
-      handleDropOnSlot(Number(slot.dataset.slotIndex), {
-        x: slotRect.left + slotRect.width / 2,
-        y: slotRect.top + slotRect.height / 2,
-      });
+      handleDropInWorld(
+        worldPosition,
+        targetInstanceId,
+        targetRect
+          ? {
+              x: targetRect.left + targetRect.width / 2,
+              y: targetRect.top + targetRect.height / 2,
+            }
+          : {
+              x: event.clientX,
+              y: event.clientY,
+            },
+      );
     }
 
     window.addEventListener('pointermove', handleWindowPointerMove);
@@ -603,28 +649,6 @@ function App() {
       window.removeEventListener('pointerup', handleWindowPointerUp);
     };
   }, [dragState, model.state.creatures, model.state.eggs, model.state.portalState]);
-
-  useEffect(() => {
-    function handlePointerMove(event: PointerEvent) {
-      const creatureElement = document
-        .elementsFromPoint(event.clientX, event.clientY)
-        .map((element) => element.closest<HTMLElement>('[data-creature-instance-id]'))
-        .find(Boolean);
-
-      const instanceId = creatureElement?.dataset.creatureInstanceId;
-      if (instanceId) collectCreatureCoins(instanceId);
-    }
-
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    return () => window.removeEventListener('pointermove', handlePointerMove);
-  }, [collectCreatureCoins]);
-
-  const draggedCreature = dragState?.kind === 'creature'
-    ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
-    : null;
-  const draggedEgg = dragState?.kind === 'egg'
-    ? model.state.eggs.find((egg) => egg.eggId === dragState.instanceId)
-    : null;
 
   useEffect(() => {
     if (model.portalPulseId === 0) return;
@@ -853,12 +877,14 @@ function App() {
           creatures={model.state.creatures}
           eggs={model.state.eggs}
           dragState={dragState}
+          dragWorldPosition={dragWorldPosition}
           collectionBursts={collectionBursts}
-          mergeHintInstanceIds={mergeHintInstanceIds}
+          openingEggIds={openingEggIds}
+          highlightedEggIds={highlightedTutorialEggIds}
+          mergeHintInstanceIds={[...new Set([...mergeHintInstanceIds, ...dragMergeTargetIds])]}
           environmentalHintInstanceIds={environmentalHintInstanceIds}
           mergeGestureHint={mergeGestureHint}
           onCreaturePointerDown={handleCreaturePointerDown}
-          onCollectCreature={collectCreatureCoins}
           onEggPointerDown={handleEggPointerDown}
         />
         <div className="hudLayer">
@@ -911,12 +937,17 @@ function App() {
           </div>
         ) : null}
         {model.toast ? <p className="toast" role="status">{model.toast}</p> : null}
+        {tutorialMessage && !hasBlockingModal ? (
+          <p className={`guidedTutorialPrompt guidedTutorialPrompt--${guidedTutorialStep}`}>
+            {tutorialMessage}
+          </p>
+        ) : null}
 
         <div className="actionBar">
           <BuyCreatureButton
-            disabled={!canBuyEgg}
-            price={formatCoins(eggPrice)}
-            onBuy={() => dispatch({ type: 'buyEgg' })}
+            disabled={!canOpenShopForPurchase}
+            isHighlighted={guidedTutorialStep === 'buyEgg'}
+            onBuy={() => setIsShopOpen(true)}
           />
         </div>
 
@@ -937,7 +968,7 @@ function App() {
             onClick={() => setIsSellMode((current) => !current)}
           >
             <span className="iconTile__symbol">
-              <Trash2 size={22} aria-hidden="true" />
+              <img src="/ui/sell.png" alt="" />
             </span>
             <span>Vender</span>
             <small>{isSellMode ? 'Ativo' : '15%'}</small>
@@ -949,7 +980,7 @@ function App() {
           Resetar save
         </button>
 
-        {dragState && (draggedCreature || draggedEgg) ? (
+        {dragState?.kind === 'creature' && draggedCreatureForHints ? (
           <div
             className="dragPreview"
             style={
@@ -961,11 +992,7 @@ function App() {
             aria-hidden="true"
           >
             <img
-              src={
-                draggedCreature
-                  ? creatureDefinitions[draggedCreature.creatureId].image
-                  : cosmicEggImage
-              }
+              src={creatureDefinitions[draggedCreatureForHints.creatureId].image}
               alt=""
               decoding="async"
               onError={(event) => event.currentTarget.classList.add('is-missing')}
@@ -1010,7 +1037,19 @@ function App() {
         />
       ) : null}
 
-      {/* Futuro: reativar AnomalyShop aqui se a compra voltar a ter submenu/upgrades. */}
+      {isShopOpen ? (
+        <AnomalyShop
+          coins={model.state.coins}
+          isFull={isBoardFull}
+          state={model.state}
+          tutorialCreatureId={guidedTutorialStep === 'buyEgg' ? 'nebulo' : null}
+          onBuyCreatureEgg={(creatureId) => {
+            dispatch({ type: 'buyCreatureEgg', creatureId });
+            setIsShopOpen(false);
+          }}
+          onClose={() => setIsShopOpen(false)}
+        />
+      ) : null}
 
       {!model.state.hasSeenWelcomeModal ? (
         <div className="modalBackdrop" role="presentation">
@@ -1102,6 +1141,7 @@ function App() {
                 onClick={() => {
                   setIsResetConfirmOpen(false);
                   setIsDexOpen(false);
+                  setIsShopOpen(false);
                   setIsSellMode(false);
                   setPendingSale(null);
                   setPendingSacrifice(null);

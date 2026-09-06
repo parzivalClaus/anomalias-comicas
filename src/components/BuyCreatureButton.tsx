@@ -2,17 +2,20 @@ import { Sparkles } from 'lucide-react';
 
 interface BuyCreatureButtonProps {
   disabled: boolean;
-  price: string;
+  isHighlighted?: boolean;
   onBuy: () => void;
 }
 
-export function BuyCreatureButton({ disabled, price, onBuy }: BuyCreatureButtonProps) {
+export function BuyCreatureButton({ disabled, isHighlighted = false, onBuy }: BuyCreatureButtonProps) {
   return (
-    <button className="buyButton" type="button" disabled={disabled} onClick={onBuy}>
+    <button
+      className={`buyButton ${isHighlighted ? 'buyButton--tutorialHint' : ''}`}
+      type="button"
+      disabled={disabled}
+      onClick={onBuy}
+    >
       <Sparkles size={18} aria-hidden="true" />
-      <span>
-        Comprar Ovo <strong>{price}</strong>
-      </span>
+      <span>Loja de Ovos</span>
     </button>
   );
 }

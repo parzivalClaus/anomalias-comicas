@@ -1,6 +1,6 @@
 import { creatureDefinitions } from '../data/creatures';
 import { gameConfig } from '../data/gameConfig';
-import type { CreatureId, CreatureInstance, GameState, PortalState } from '../types/game';
+import type { CreatureDefinition, CreatureId, CreatureInstance, GameState, PortalState } from '../types/game';
 
 export function getProductionPerSecond(creatures: CreatureInstance[]) {
   return creatures.reduce(
@@ -33,6 +33,39 @@ export function getPurchasePrice(
   const purchaseCount = purchaseCounts[creatureId] ?? 0;
 
   return Math.round(basePrice * Math.pow(growth, purchaseCount));
+}
+
+export function getHighestDiscoveredNaturalTier(discoveredCreatureIds: CreatureId[]) {
+  return discoveredCreatureIds.reduce((highestTier, creatureId) => {
+    const naturalTier = creatureDefinitions[creatureId]?.naturalTier ?? 0;
+    return Math.max(highestTier, naturalTier);
+  }, 0);
+}
+
+export function canBuyCreatureFromStore(
+  definition: CreatureDefinition,
+  discoveredCreatureIds: CreatureId[],
+) {
+  if (!definition.purchasable || definition.naturalTier === null) return false;
+  if (definition.startsUnlockedInShop) return true;
+
+  const highestDiscoveredTier = getHighestDiscoveredNaturalTier(discoveredCreatureIds);
+  return definition.naturalTier <= highestDiscoveredTier - (gameConfig.storeUnlockGap - 1);
+}
+
+export function getStoreCreatureOptions(state: GameState) {
+  return Object.values(creatureDefinitions)
+    .filter((definition) => definition.purchasable && definition.naturalTier !== null)
+    .sort((a, b) => (a.naturalTier ?? 0) - (b.naturalTier ?? 0))
+    .map((definition) => ({
+      definition,
+      isUnlocked: canBuyCreatureFromStore(definition, state.discoveredCreatureIds),
+      price: getPurchasePrice(definition.id, state.purchaseCounts),
+      purchaseCount: state.purchaseCounts[definition.id] ?? 0,
+      requiredTier: definition.startsUnlockedInShop
+        ? null
+        : (definition.naturalTier ?? 0) + gameConfig.storeUnlockGap - 1,
+    }));
 }
 
 interface EggPricingState {

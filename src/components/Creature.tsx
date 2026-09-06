@@ -1,5 +1,4 @@
 import { creatureDefinitions } from '../data/creatures';
-import { gameConfig } from '../data/gameConfig';
 import type React from 'react';
 import type { CreatureInstance } from '../types/game';
 import { formatCoins } from '../utils/economy';
@@ -11,7 +10,6 @@ interface CreatureProps {
   hasMergeHint: boolean;
   hasEnvironmentalHint: boolean;
   onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
-  onCollect: () => void;
 }
 
 export function Creature({
@@ -21,14 +19,10 @@ export function Creature({
   hasMergeHint,
   hasEnvironmentalHint,
   onPointerDown,
-  onCollect,
 }: CreatureProps) {
   const definition = creatureDefinitions[creature.creatureId];
   const idleDuration = 2.1 + (creature.birthId % 7) * 0.13;
   const idleDelay = -((creature.birthId % 11) * 0.17);
-  const pendingCoins = Math.floor(creature.pendingCoins ?? 0);
-  const maxPendingCoins = definition.coinsPerSecond * gameConfig.coinStorageSeconds;
-  const hasReachedCoinCap = maxPendingCoins > 0 && pendingCoins >= maxPendingCoins;
 
   return (
     <button
@@ -41,9 +35,8 @@ export function Creature({
       ].join(' ')}
       data-creature-instance-id={creature.instanceId}
       type="button"
-      aria-label={`${definition.name}, ${definition.coinsPerSecond} moedas por segundo, ${pendingCoins} moedas acumuladas`}
+      aria-label={`${definition.name}, ${definition.coinsPerSecond} moedas por segundo`}
       onPointerDown={onPointerDown}
-      onPointerEnter={onCollect}
       style={
         {
           '--idle-duration': `${idleDuration}s`,
@@ -60,16 +53,6 @@ export function Creature({
         decoding="async"
         onError={(event) => event.currentTarget.classList.add('is-missing')}
       />
-      {pendingCoins > 0 ? (
-        <span
-          className={`creature__pendingCoins ${
-            hasReachedCoinCap ? 'creature__pendingCoins--capped' : ''
-          }`}
-          aria-hidden="true"
-        >
-          {formatCoins(pendingCoins)}
-        </span>
-      ) : null}
       {collectionBurst ? (
         <span className="creature__coinCollect" key={collectionBurst.id} aria-hidden="true">
           +{formatCoins(collectionBurst.amount)}

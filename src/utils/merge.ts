@@ -1,5 +1,4 @@
 import { evolutionRecipes } from '../data/evolutions';
-import { gameConfig } from '../data/gameConfig';
 import type { CreatureInstance, CreatureId, EvolutionCondition } from '../types/game';
 
 type MergeEvaluation =
@@ -11,31 +10,12 @@ function recipeMatches(inputs: [CreatureId, CreatureId], dragged: CreatureId, ta
   return inputs.includes(dragged) && inputs.includes(target);
 }
 
-interface MergeEnvironment {
-  targetSlotIndex: number;
-}
-
 interface MergeContext {
   dragged: CreatureInstance;
   target: CreatureInstance;
-  environment: MergeEnvironment;
 }
 
-function isSlotInPortalInfluence(slotIndex: number) {
-  return slotIndex >= 0 && slotIndex < gameConfig.boardColumns;
-}
-
-function getMergeEnvironment(target: CreatureInstance): MergeEnvironment {
-  return {
-    targetSlotIndex: target.slotIndex,
-  };
-}
-
-function conditionIsMet(condition: EvolutionCondition, context: MergeContext) {
-  if (condition.type === 'portal_influence') {
-    return isSlotInPortalInfluence(context.environment.targetSlotIndex);
-  }
-
+function conditionIsMet(_condition: EvolutionCondition, _context: MergeContext) {
   return false;
 }
 
@@ -54,7 +34,6 @@ export function evaluateMerge(
   const context: MergeContext = {
     dragged,
     target,
-    environment: getMergeEnvironment(target),
   };
   const conditionsMet =
     recipe.conditions?.every((condition) => conditionIsMet(condition, context)) ?? true;
