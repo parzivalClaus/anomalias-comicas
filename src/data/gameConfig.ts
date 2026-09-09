@@ -42,9 +42,13 @@ export const ECONOMY_BALANCE = {
       4: 125,
       5: 140,
       6: 140,
+      7: 140,
+      8: 150,
+      9: 160,
+      10: 180,
     },
     defaultEnergy: 140,
-    finalMapOneNaturalTier: 6,
+    finalMapOneNaturalTier: 10,
   },
   criticalProductionPerSecond: 10,
   productionPerSecond: {
@@ -54,6 +58,20 @@ export const ECONOMY_BALANCE = {
     neburix: 18,
     gravulon: 40,
     singulume: 90,
+    astralume: 145,
+    cosmoryx: 220,
+    nexoryx: 330,
+    translume: 500,
+  },
+} as const;
+
+export const MAP_CONFIG = {
+  map1: {
+    maxNaturalTier: 10,
+    transitionTier: 11,
+  },
+  map2: {
+    minNaturalTier: 11,
   },
 } as const;
 
@@ -87,6 +105,7 @@ export const gameConfig = {
   portalResidualIncomePerSecond: ECONOMY_BALANCE.portalResidualIncomePerSecond,
   portalSacrificeWarningPercent: ECONOMY_BALANCE.portalSacrificeWarningPercent,
   portalRequests: ECONOMY_BALANCE.portalRequests,
+  mapConfig: MAP_CONFIG,
   criticalProductionPerSecond: ECONOMY_BALANCE.criticalProductionPerSecond,
   autosaveMs: 2500,
   cloudSyncMs: 15000,

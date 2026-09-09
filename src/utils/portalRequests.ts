@@ -125,7 +125,7 @@ export function advancePortalRequestCooldown(state: GameState, now = Date.now())
   if (state.portalEnergy >= state.portalEnergyRequired) {
     return {
       ...state,
-      portalState: 'charged',
+      portalState: 'awaiting_transition',
       portalRequestState: 'charged',
       activePortalRequest: null,
       portalRequestCooldownStartedAt: null,
@@ -153,7 +153,7 @@ export function isFinalMapOneNaturalMergeResult(creatureId: CreatureId) {
 
   return (
     definition.progressionType === 'natural' &&
-    definition.naturalTier === gameConfig.portalRequests.finalMapOneNaturalTier
+    definition.naturalTier === gameConfig.mapConfig.map1.transitionTier
   );
 }
 

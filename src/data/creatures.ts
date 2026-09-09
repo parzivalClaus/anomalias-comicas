@@ -1,9 +1,13 @@
+import astralumeImage from '../assets/creatures/astralume.png';
+import cosmoryxImage from '../assets/creatures/cosmoryx.png';
 import gravulonImage from '../assets/creatures/gravulon.png';
 import nebuloImage from '../assets/creatures/nebulo.png';
 import nebuluxImage from '../assets/creatures/nebulux.png';
 import nebulumeImage from '../assets/creatures/nebulume.png';
 import neburixImage from '../assets/creatures/neburix.png';
+import nexoryxImage from '../assets/creatures/Nexoryx.png';
 import singulumeImage from '../assets/creatures/singulume.png';
+import translumeImage from '../assets/creatures/translume.png';
 import umbrelumeImage from '../assets/creatures/umbrelume.png';
 import { ECONOMY_BALANCE } from './gameConfig';
 import type { CreatureDefinition, CreatureId } from '../types/game';
@@ -139,20 +143,103 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     id: 'singulume',
     dexNumber: 7,
     name: 'Singulume',
-    tier: 6,
+    tier: 7,
     image: singulumeImage,
     coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.singulume,
     purchasable: true,
     basePurchasePrice: 20000,
     familyId: 'nebulo',
-    naturalTier: 6,
+    naturalTier: 7,
     progressionType: 'natural',
     portalEnergyValue: 200,
-    stage: 6,
+    stage: 7,
     canHatchFromCosmicEgg: false,
     description:
       'Uma singularidade viva em miniatura. A luz ao redor dela parece escolher caminhos mais longos.',
     undiscoveredHint: 'Gravulons em ressonância talvez gerem algo que não deveria caber no tabuleiro.',
+    idleAnimation: 'breathe',
+    effect: 'bubbles',
+  },
+  astralume: {
+    id: 'astralume',
+    dexNumber: 8,
+    name: 'Astralume',
+    tier: 8,
+    image: astralumeImage,
+    coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.astralume,
+    purchasable: true,
+    basePurchasePrice: 62000,
+    familyId: 'nebulo',
+    naturalTier: 8,
+    progressionType: 'natural',
+    portalEnergyValue: 320,
+    stage: 8,
+    canHatchFromCosmicEgg: false,
+    description:
+      'Uma anomalia luminosa que parece refletir constelações que ainda não existem neste céu.',
+    undiscoveredHint: 'Singulumes em ressonância talvez revelem um brilho mais antigo.',
+    idleAnimation: 'breathe',
+    effect: 'bubbles',
+  },
+  cosmoryx: {
+    id: 'cosmoryx',
+    dexNumber: 9,
+    name: 'Cosmoryx',
+    tier: 9,
+    image: cosmoryxImage,
+    coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.cosmoryx,
+    purchasable: true,
+    basePurchasePrice: 180000,
+    familyId: 'nebulo',
+    naturalTier: 9,
+    progressionType: 'natural',
+    portalEnergyValue: 520,
+    stage: 9,
+    canHatchFromCosmicEgg: false,
+    description:
+      'Sua forma dobra pequenos fragmentos do espaço, como se guardasse um mapa inteiro dentro de si.',
+    undiscoveredHint: 'Dois Astralumes talvez consigam sustentar uma órbita impossível.',
+    idleAnimation: 'breathe',
+    effect: 'bubbles',
+  },
+  nexoryx: {
+    id: 'nexoryx',
+    dexNumber: 10,
+    name: 'Nexoryx',
+    tier: 10,
+    image: nexoryxImage,
+    coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.nexoryx,
+    purchasable: true,
+    basePurchasePrice: 540000,
+    familyId: 'nebulo',
+    naturalTier: 10,
+    progressionType: 'natural',
+    portalEnergyValue: 800,
+    stage: 10,
+    canHatchFromCosmicEgg: false,
+    description:
+      'O teto natural do primeiro mundo. Sua energia parece pressionar a realidade em direção ao portal.',
+    undiscoveredHint: 'Cosmoryx em ressonância talvez alcance o limite deste mundo.',
+    idleAnimation: 'breathe',
+    effect: 'bubbles',
+  },
+  translume: {
+    id: 'translume',
+    dexNumber: 11,
+    name: 'Translume',
+    tier: 11,
+    image: translumeImage,
+    coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.translume,
+    purchasable: false,
+    familyId: 'nebulo',
+    naturalTier: 11,
+    progressionType: 'natural',
+    portalEnergyValue: 1200,
+    stage: 11,
+    canHatchFromCosmicEgg: false,
+    description:
+      'A primeira anomalia capaz de atravessar a conexão aberta entre mundos.',
+    undiscoveredHint: 'O portal estabilizado parece aguardar uma anomalia além do limite.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
   },

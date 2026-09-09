@@ -21,4 +21,20 @@ export const evolutionRecipes: EvolutionRecipe[] = [
     inputs: ['gravulon', 'gravulon'],
     result: 'singulume',
   },
+  {
+    inputs: ['singulume', 'singulume'],
+    result: 'astralume',
+  },
+  {
+    inputs: ['astralume', 'astralume'],
+    result: 'cosmoryx',
+  },
+  {
+    inputs: ['cosmoryx', 'cosmoryx'],
+    result: 'nexoryx',
+  },
+  {
+    inputs: ['nexoryx', 'nexoryx'],
+    result: 'translume',
+  },
 ];

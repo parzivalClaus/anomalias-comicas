@@ -68,6 +68,7 @@ export type GameAction =
   | { type: 'dismissWelcome' }
   | { type: 'dismissCloudSavePrompt' }
   | { type: 'dismissDiscovery' }
+  | { type: 'switchMap'; mapId?: 'map1' | 'map2' }
   | { type: 'reset' }
   | { type: 'touchTimestamp' };
 
@@ -135,15 +136,17 @@ function distanceSquared(a: { x: number; y: number }, b: { x: number; y: number 
   return dx * dx + dy * dy;
 }
 
-function getEntityPositions(state: Pick<GameState, 'creatures' | 'eggs'>) {
+function getEntityPositions(state: Pick<GameState, 'creatures' | 'eggs'>, mapId = 'map1') {
   return [
-    ...state.creatures.map((creature) => ({ x: creature.x, y: creature.y })),
-    ...state.eggs.map((egg) => ({ x: egg.x, y: egg.y })),
+    ...state.creatures
+      .filter((creature) => creature.mapId === mapId)
+      .map((creature) => ({ x: creature.x, y: creature.y })),
+    ...state.eggs.filter((egg) => egg.mapId === mapId).map((egg) => ({ x: egg.x, y: egg.y })),
   ];
 }
 
-function findWorldSpawnPosition(state: Pick<GameState, 'creatures' | 'eggs'>) {
-  const occupiedPositions = getEntityPositions(state);
+function findWorldSpawnPosition(state: Pick<GameState, 'creatures' | 'eggs'>, mapId = 'map1') {
+  const occupiedPositions = getEntityPositions(state, mapId);
   let bestPosition = clampWorldPosition(
     worldBounds.minX + Math.random() * (worldBounds.maxX - worldBounds.minX),
     worldBounds.minY + Math.random() * (worldBounds.maxY - worldBounds.minY),
@@ -185,6 +188,7 @@ function getCreatureVelocity(seed = Date.now()) {
 export function createInstance(
   creatureId: CreatureId,
   positionOrSlot: number | { x: number; y: number },
+  mapId: 'map1' | 'map2' = 'map1',
 ): CreatureInstance {
   idCounter += 1;
   const position =
@@ -196,6 +200,7 @@ export function createInstance(
     instanceId:
       globalThis.crypto?.randomUUID?.() ?? `${creatureId}-${Date.now()}-${idCounter}`,
     creatureId,
+    mapId,
     x: clampedPosition.x,
     y: clampedPosition.y,
     ...velocity,
@@ -207,6 +212,7 @@ function createEgg(
   positionOrSlot: number | { x: number; y: number },
   source: EggSource = 'free',
   contentCreatureId?: CreatureId,
+  mapId: 'map1' | 'map2' = 'map1',
 ): EggState {
   idCounter += 1;
   const position =
@@ -215,6 +221,7 @@ function createEgg(
 
   return {
     eggId: globalThis.crypto?.randomUUID?.() ?? `egg-${Date.now()}-${idCounter}`,
+    mapId,
     x: clampedPosition.x,
     y: clampedPosition.y,
     birthId: Date.now() + idCounter,
@@ -227,7 +234,7 @@ export function getInitialState(): GameState {
   return {
     coins: gameConfig.startingCoins,
     creatures: [],
-    eggs: [createEgg(findWorldSpawnPosition({ creatures: [], eggs: [] }), 'free')],
+    eggs: [createEgg(findWorldSpawnPosition({ creatures: [], eggs: [] }, 'map1'), 'free')],
     discoveredCreatureIds: [],
     purchaseCounts: {},
     purchasedEggCount: 0,
@@ -266,8 +273,12 @@ export function getInitialModel(): GameModel {
   };
 }
 
-function hasWorldCapacity(state: Pick<GameState, 'creatures' | 'eggs'>) {
-  return state.creatures.length + state.eggs.length < gameConfig.maxWorldEntities;
+function hasWorldCapacity(state: Pick<GameState, 'creatures' | 'eggs'>, mapId = 'map1') {
+  return (
+    state.creatures.filter((creature) => creature.mapId === mapId).length +
+      state.eggs.filter((egg) => egg.mapId === mapId).length <
+    gameConfig.maxWorldEntities
+  );
 }
 
 function familyIsKnown(definition: CreatureDefinition, state: GameState) {
@@ -350,7 +361,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
   switch (action.type) {
     case 'buyEgg': {
       const cost = model.state.currentEggPrice;
-      const canCreateEgg = hasWorldCapacity(model.state);
+      const canCreateEgg = hasWorldCapacity(model.state, model.state.currentMapId);
 
       if (!canCreateEgg) {
         return { ...model, toast: 'Não há espaço livre no campo.' };
@@ -367,7 +378,12 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         coins: model.state.coins - cost,
         eggs: [
           ...model.state.eggs,
-          createEgg(findWorldSpawnPosition(model.state), 'purchased'),
+            createEgg(
+              findWorldSpawnPosition(model.state, model.state.currentMapId),
+              'purchased',
+              undefined,
+              model.state.currentMapId,
+            ),
         ],
         purchasedEggCount: model.state.purchasedEggCount + 1,
         eggPurchasePressure: nextEggPurchasePressure,
@@ -394,7 +410,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         return { ...model, toast: 'Essa anomalia ainda não está disponível.' };
       }
 
-      if (!hasWorldCapacity(model.state)) {
+      if (!hasWorldCapacity(model.state, model.state.currentMapId)) {
         return { ...model, toast: 'Não há espaço livre no campo.' };
       }
 
@@ -411,7 +427,12 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           coins: model.state.coins - option.price,
           eggs: [
             ...model.state.eggs,
-            createEgg(findWorldSpawnPosition(model.state), 'purchased', action.creatureId),
+            createEgg(
+              findWorldSpawnPosition(model.state, model.state.currentMapId),
+              'purchased',
+              action.creatureId,
+              model.state.currentMapId,
+            ),
           ],
           purchaseCounts: {
             ...model.state.purchaseCounts,
@@ -468,7 +489,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       }
 
       const alreadyDiscovered = model.state.discoveredCreatureIds.includes(hatchedCreatureId);
-      const hatchedCreature = createInstance(hatchedCreatureId, { x: egg.x, y: egg.y });
+      const hatchedCreature = createInstance(hatchedCreatureId, { x: egg.x, y: egg.y }, egg.mapId);
       const discoveredCreatureIds = alreadyDiscovered
         ? model.state.discoveredCreatureIds
         : [...model.state.discoveredCreatureIds, hatchedCreatureId];
@@ -519,7 +540,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         return {
           ...model,
           toast:
-            model.state.portalState === 'charged'
+            model.state.portalState === 'awaiting_transition'
               ? 'O portal já está estabilizado.'
               : 'O portal não está pedindo nada agora.',
           soundCue: createSoundCue('invalid'),
@@ -541,7 +562,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         model.state.portalEnergy + gainedEnergy,
         model.state.portalEnergyRequired,
       );
-      const portalCharged = completed && nextEnergy >= model.state.portalEnergyRequired;
+      const portalAwaitingTransition = completed && nextEnergy >= model.state.portalEnergyRequired;
       const nextRequest = completed
         ? null
         : {
@@ -554,7 +575,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         portalPulseId: model.portalPulseId + 1,
         soundCue: createSoundCue('portalTransform'),
         toast: completed
-          ? portalCharged
+          ? portalAwaitingTransition
             ? 'O portal está estabilizado. Algo ainda falta.'
             : `Pedido concluído. +${gainedEnergy} energia.`
           : `${deliveredCount}/${request.requiredCount} entregue ao portal.`,
@@ -562,10 +583,15 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           ...model.state,
           creatures: model.state.creatures.filter((item) => item.instanceId !== action.instanceId),
           portalEnergy: nextEnergy,
-          portalState: portalCharged ? 'charged' : model.state.portalState,
-          portalRequestState: completed ? (portalCharged ? 'charged' : 'cooldown') : 'active',
+          portalState: portalAwaitingTransition ? 'awaiting_transition' : model.state.portalState,
+          portalRequestState: completed
+            ? portalAwaitingTransition
+              ? 'charged'
+              : 'cooldown'
+            : 'active',
           activePortalRequest: nextRequest,
-          portalRequestCooldownStartedAt: completed && !portalCharged ? Date.now() : null,
+          portalRequestCooldownStartedAt:
+            completed && !portalAwaitingTransition ? Date.now() : null,
           lastSavedAt: Date.now(),
         },
       };
@@ -593,7 +619,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         ...stateAfterCollection,
         creatures: [
           ...stateAfterCollection.creatures,
-          createInstance(action.resultCreatureId, { x: source.x, y: source.y }),
+          createInstance(action.resultCreatureId, { x: source.x, y: source.y }, source.mapId),
         ],
         discoveredCreatureIds: alreadyDiscovered
           ? model.state.discoveredCreatureIds
@@ -624,11 +650,38 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
 
     case 'merge': {
       const alreadyDiscovered = model.state.discoveredCreatureIds.includes(action.resultCreatureId);
-      const nextCreature = createInstance(action.resultCreatureId, { x: action.x, y: action.y });
+      const source = model.state.creatures.find(
+        (creature) => creature.instanceId === action.sourceInstanceId,
+      );
+      const target = model.state.creatures.find(
+        (creature) => creature.instanceId === action.targetInstanceId,
+      );
+      if (!source || !target) return model;
+
+      const isMapOneTransitionMerge =
+        source.mapId === 'map1' &&
+        target.mapId === 'map1' &&
+        isFinalMapOneNaturalMergeResult(action.resultCreatureId);
+      const canCrossPortal =
+        model.state.portalState === 'awaiting_transition' || model.state.portalState === 'open';
+
+      if (isMapOneTransitionMerge && !canCrossPortal) {
+        return {
+          ...model,
+          toast:
+            'Esta anomalia não pode evoluir neste mundo... O portal ainda não está estabilizado.',
+          soundCue: createSoundCue('invalid'),
+        };
+      }
+
+      const nextCreature = createInstance(
+        action.resultCreatureId,
+        { x: action.x, y: action.y },
+        isMapOneTransitionMerge ? 'map2' : target.mapId,
+      );
       const shouldPulsePortal = action.resultCreatureId === 'umbrelume';
-      const shouldUnlockMap2 =
-        isFinalMapOneNaturalMergeResult(action.resultCreatureId) &&
-        model.state.portalState === 'charged';
+      const shouldOpenPortal =
+        isMapOneTransitionMerge && model.state.portalState === 'awaiting_transition';
       const stateAfterCollection = removeCreatures(model.state, [
         action.sourceInstanceId,
         action.targetInstanceId,
@@ -645,13 +698,13 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           : model.state.hasSeenPortalReaction,
         hasCompletedFirstMergeTutorial: true,
         guidedTutorialStep: 'done',
-        portalState: shouldUnlockMap2 ? 'active' : stateAfterCollection.portalState,
-        portalRequestState: shouldUnlockMap2 ? null : stateAfterCollection.portalRequestState,
-        activePortalRequest: shouldUnlockMap2 ? null : stateAfterCollection.activePortalRequest,
-        portalRequestCooldownStartedAt: shouldUnlockMap2
+        portalState: shouldOpenPortal ? 'open' : stateAfterCollection.portalState,
+        portalRequestState: shouldOpenPortal ? null : stateAfterCollection.portalRequestState,
+        activePortalRequest: shouldOpenPortal ? null : stateAfterCollection.activePortalRequest,
+        portalRequestCooldownStartedAt: shouldOpenPortal
           ? null
           : stateAfterCollection.portalRequestCooldownStartedAt,
-        unlockedMapIds: shouldUnlockMap2
+        unlockedMapIds: shouldOpenPortal
           ? Array.from(new Set([...stateAfterCollection.unlockedMapIds, 'map2']))
           : stateAfterCollection.unlockedMapIds,
         lastSavedAt: Date.now(),
@@ -660,13 +713,17 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       return {
         ...model,
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.resultCreatureId,
-        toast: shouldUnlockMap2
-          ? 'A anomalia atravessou o portal. Mapa 2 desbloqueado.'
+        toast: isMapOneTransitionMerge
+          ? shouldOpenPortal
+            ? 'A anomalia atravessou o portal. Mapa 2 desbloqueado.'
+            : 'A anomalia atravessou o portal.'
           : alreadyDiscovered
             ? null
             : 'Nova anomalia descoberta!',
         portalPulseId:
-          shouldPulsePortal || shouldUnlockMap2 ? model.portalPulseId + 1 : model.portalPulseId,
+          shouldPulsePortal || isMapOneTransitionMerge
+            ? model.portalPulseId + 1
+            : model.portalPulseId,
         soundCue: createSoundCue('merge'),
         state: nextState,
       };
@@ -761,10 +818,10 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       const shouldResolveEggCycle =
         !guidedTutorialIsActive && model.state.remainingEggSpawnSeconds <= elapsedSeconds;
       const canSpawnEgg =
-        shouldResolveEggCycle && hasHatchCandidate(model.state) && hasWorldCapacity(model.state);
+        shouldResolveEggCycle && hasHatchCandidate(model.state) && hasWorldCapacity(model.state, 'map1');
       const nextEggs =
         canSpawnEgg
-          ? [...model.state.eggs, createEgg(findWorldSpawnPosition(model.state), 'free')]
+          ? [...model.state.eggs, createEgg(findWorldSpawnPosition(model.state, 'map1'), 'free')]
           : model.state.eggs;
       const spawnedEgg = nextEggs.length !== model.state.eggs.length;
       const missedEgg = shouldResolveEggCycle && !spawnedEgg;
@@ -821,6 +878,36 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
 
     case 'dismissDiscovery':
       return { ...model, latestDiscoveryId: null, toast: null };
+
+    case 'switchMap': {
+      if (model.state.portalState !== 'open') {
+        return {
+          ...model,
+          toast: 'O portal ainda não está aberto.',
+          soundCue: createSoundCue('invalid'),
+        };
+      }
+
+      const targetMapId =
+        action.mapId ?? (model.state.currentMapId === 'map1' ? 'map2' : 'map1');
+      if (!model.state.unlockedMapIds.includes(targetMapId)) {
+        return {
+          ...model,
+          toast: 'Este mundo ainda não foi desbloqueado.',
+          soundCue: createSoundCue('invalid'),
+        };
+      }
+
+      return {
+        ...model,
+        toast: targetMapId === 'map2' ? 'Mapa 2' : 'Mapa 1',
+        state: {
+          ...model.state,
+          currentMapId: targetMapId,
+          lastSavedAt: Date.now(),
+        },
+      };
+    }
 
     case 'touchTimestamp':
       return { ...model, state: { ...model.state, lastSavedAt: Date.now() } };

@@ -10,7 +10,7 @@ export function getProductionPerSecond(creatures: CreatureInstance[]) {
 }
 
 export function getPortalResidualIncomePerSecond(portalState: PortalState) {
-  return portalState === 'cracked' || portalState === 'charged' || portalState === 'active'
+  return portalState === 'cracked' || portalState === 'awaiting_transition' || portalState === 'open'
     ? gameConfig.portalResidualIncomePerSecond
     : 0;
 }
@@ -44,12 +44,23 @@ export function getHighestDiscoveredNaturalTier(discoveredCreatureIds: CreatureI
 
 export function canBuyCreatureFromStore(
   definition: CreatureDefinition,
-  discoveredCreatureIds: CreatureId[],
+  state: Pick<GameState, 'discoveredCreatureIds' | 'currentMapId'>,
 ) {
   if (!definition.purchasable || definition.naturalTier === null) return false;
-  if (definition.startsUnlockedInShop) return true;
+  const maxTierForMap =
+    state.currentMapId === 'map1'
+      ? gameConfig.mapConfig.map1.maxNaturalTier
+      : Infinity;
+  const minTierForMap =
+    state.currentMapId === 'map2' ? gameConfig.mapConfig.map2.minNaturalTier : 1;
 
-  const highestDiscoveredTier = getHighestDiscoveredNaturalTier(discoveredCreatureIds);
+  if (definition.naturalTier > maxTierForMap || definition.naturalTier < minTierForMap) {
+    return false;
+  }
+
+  if (definition.startsUnlockedInShop) return state.currentMapId === 'map1';
+
+  const highestDiscoveredTier = getHighestDiscoveredNaturalTier(state.discoveredCreatureIds);
   return definition.naturalTier <= highestDiscoveredTier - (gameConfig.storeUnlockGap - 1);
 }
 
@@ -59,7 +70,7 @@ export function getStoreCreatureOptions(state: GameState) {
     .sort((a, b) => (a.naturalTier ?? 0) - (b.naturalTier ?? 0))
     .map((definition) => ({
       definition,
-      isUnlocked: canBuyCreatureFromStore(definition, state.discoveredCreatureIds),
+      isUnlocked: canBuyCreatureFromStore(definition, state),
       price: getPurchasePrice(definition.id, state.purchaseCounts),
       purchaseCount: state.purchaseCounts[definition.id] ?? 0,
       requiredTier: definition.startsUnlockedInShop

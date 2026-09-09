@@ -5,11 +5,15 @@ export type CreatureId =
   | 'umbrelume'
   | 'neburix'
   | 'gravulon'
-  | 'singulume';
+  | 'singulume'
+  | 'astralume'
+  | 'cosmoryx'
+  | 'nexoryx'
+  | 'translume';
 export type EvolutionConditionType = 'portal_influence';
 export type EnvironmentId = 'portal';
 export type ProgressionType = 'natural' | 'environmental';
-export type PortalState = 'dormant' | 'cracked' | 'charged' | 'active';
+export type PortalState = 'dormant' | 'cracked' | 'awaiting_transition' | 'open';
 export type PortalRequestState = 'active' | 'cooldown' | 'charged';
 export type MapId = 'map1' | 'map2';
 export type EggSource = 'free' | 'purchased';
@@ -75,6 +79,7 @@ export interface PortalRequest {
 export interface CreatureInstance {
   instanceId: string;
   creatureId: CreatureId;
+  mapId: MapId;
   slotIndex?: number;
   x: number;
   y: number;
@@ -85,6 +90,7 @@ export interface CreatureInstance {
 
 export interface EggState {
   eggId: string;
+  mapId: MapId;
   slotIndex?: number;
   x: number;
   y: number;
@@ -130,7 +136,7 @@ export interface OfflineReward {
 }
 
 export interface VersionedGameSave {
-  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   state: GameState;
   updatedAt: string;
   ownerType: SaveOwnerType;

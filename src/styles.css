@@ -330,12 +330,12 @@ button {
   transform: translateX(-50%);
 }
 
-.gameStage--portal-active .portalDropZone {
+.gameStage--portal-open .portalDropZone {
   cursor: pointer;
 }
 
 .gameStage--portal-cracked .portalDropZone::after,
-.gameStage--portal-charged .portalDropZone::after {
+.gameStage--portal-awaiting_transition .portalDropZone::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -484,11 +484,11 @@ button {
   border-color: rgba(141, 255, 241, 0.76);
 }
 
-.gameStage--portal-charged .portalMeter {
+.gameStage--portal-awaiting_transition .portalMeter {
   border-color: rgba(255, 231, 132, 0.78);
 }
 
-.gameStage--portal-active .portalHint {
+.gameStage--portal-open .portalHint {
   display: none;
 }
 

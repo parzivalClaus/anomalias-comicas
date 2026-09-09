@@ -41,8 +41,9 @@ import { evolutionRecipes } from './data/evolutions';
 const boardBackgrounds = {
   dormant: '/backgrounds/game-board.png',
   cracked: '/backgrounds/game-board-portal-cracked.png',
-  charged: '/backgrounds/game-board-portal-cracked.png',
-  active: '/backgrounds/game-board-portal-open.png',
+  awaiting_transition: '/backgrounds/game-board-portal-cracked.png',
+  open: '/backgrounds/game-board-portal-open.png',
+  map2: '/backgrounds/game-board-2.png',
 } as const;
 
 function requestPortraitOrientationLock() {
@@ -105,7 +106,6 @@ function App() {
   const [isSellMode, setIsSellMode] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
-  const [isMapPreviewOpen, setIsMapPreviewOpen] = useState(false);
   const [isPortalReacting, setIsPortalReacting] = useState(false);
   const [lastInteractionAt, setLastInteractionAt] = useState(Date.now());
   const [mergeTutorialPhase, setMergeTutorialPhase] = useState<'idle' | 'pulse' | 'gesture'>(
@@ -130,13 +130,17 @@ function App() {
   const lastRenderedProductionPulseRef = useRef(model.productionPulseId);
 
   const productionPerSecond = getTotalProductionPerSecond(model.state);
-  const occupiedEntities = model.state.creatures.length + model.state.eggs.length;
+  const visibleCreatures = model.state.creatures.filter(
+    (creature) => creature.mapId === model.state.currentMapId,
+  );
+  const visibleEggs = model.state.eggs.filter((egg) => egg.mapId === model.state.currentMapId);
+  const occupiedEntities = visibleCreatures.length + visibleEggs.length;
   const isBoardFull = occupiedEntities >= gameConfig.maxWorldEntities;
   const guidedTutorialStep = model.state.guidedTutorialStep;
   const eggTimerSeconds = model.state.remainingEggSpawnSeconds;
   const mergeTutorialHint = model.state.hasCompletedFirstMergeTutorial
     ? null
-    : findMergeTutorialHint(model.state.creatures);
+    : findMergeTutorialHint(visibleCreatures);
   const mergeHintInstanceIds =
     mergeTutorialHint && (mergeTutorialPhase !== 'idle' || guidedTutorialStep === 'merge')
       ? [mergeTutorialHint.sourceInstanceId, mergeTutorialHint.targetInstanceId]
@@ -146,7 +150,7 @@ function App() {
       ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
       : null;
   const dragMergeTargetIds = draggedCreatureForHints
-    ? model.state.creatures
+    ? visibleCreatures
         .filter(
           (creature) =>
             creature.instanceId !== draggedCreatureForHints.instanceId &&
@@ -167,6 +171,7 @@ function App() {
     ? getWorldPositionFromPoint(dragState.pointerX, dragState.pointerY)
     : null;
   const environmentalHintSignature = model.state.creatures
+    .filter((creature) => creature.mapId === model.state.currentMapId)
     .map((creature) => `${creature.instanceId}:${creature.creatureId}`)
     .sort()
     .join('|');
@@ -177,8 +182,11 @@ function App() {
           Math.round((model.state.portalEnergy / model.state.portalEnergyRequired) * 100),
         )
       : 0;
-  const boardBackground = boardBackgrounds[model.state.portalState];
-  const creatureCounts = model.state.creatures.reduce<Partial<Record<string, number>>>(
+  const boardBackground =
+    model.state.currentMapId === 'map2'
+      ? boardBackgrounds.map2
+      : boardBackgrounds[model.state.portalState];
+  const creatureCounts = visibleCreatures.reduce<Partial<Record<string, number>>>(
     (counts, creature) => ({
       ...counts,
       [creature.creatureId]: (counts[creature.creatureId] ?? 0) + 1,
@@ -190,17 +198,18 @@ function App() {
   if (
     model.state.portalState === 'dormant' &&
     (model.state.discoveredCreatureIds.includes('nebulux') ||
-      model.state.creatures.some((creature) => creature.creatureId === 'nebulux'))
+      visibleCreatures.some((creature) => creature.creatureId === 'nebulux'))
   ) {
     preloadCandidateImages.add(boardBackgrounds.cracked);
   }
 
   if (
     (model.state.portalState === 'cracked' && portalProgress >= 80) ||
-    model.state.portalState === 'charged'
+    model.state.portalState === 'awaiting_transition'
   ) {
-    preloadCandidateImages.add(boardBackgrounds.active);
+    preloadCandidateImages.add(boardBackgrounds.open);
   }
+  preloadCandidateImages.add(boardBackgrounds.map2);
 
   for (const recipe of evolutionRecipes) {
     const [firstInput, secondInput] = recipe.inputs;
@@ -253,14 +262,13 @@ function App() {
     !model.state.hasSeenWelcomeModal ||
     isResetConfirmOpen ||
     Boolean(pendingSale) ||
-    isMapPreviewOpen ||
     Boolean(visibleDiscoveryId) ||
     Boolean(initial.offlineReward);
   const highlightedTutorialEggIds =
     guidedTutorialStep === 'openFirstEgg'
-      ? model.state.eggs.slice(0, 1).map((egg) => egg.eggId)
+      ? visibleEggs.slice(0, 1).map((egg) => egg.eggId)
       : guidedTutorialStep === 'openSecondEgg'
-        ? model.state.eggs.filter((egg) => egg.source === 'purchased').map((egg) => egg.eggId)
+        ? visibleEggs.filter((egg) => egg.source === 'purchased').map((egg) => egg.eggId)
         : [];
   const tutorialMessage =
     guidedTutorialStep === 'openFirstEgg'
@@ -295,12 +303,12 @@ function App() {
     lastRenderedProductionPulseRef.current = model.productionPulseId;
     if (model.productionPulseId <= 0) return;
 
-    const productiveCreatures = model.state.creatures.filter(
+    const productiveCreatures = visibleCreatures.filter(
       (creature) => creatureDefinitions[creature.creatureId].coinsPerSecond > 0,
     );
     if (productiveCreatures.length === 0) return;
 
-    const visibleCreatures = productiveCreatures
+    const burstCreatures = productiveCreatures
       .map((creature) => ({
         creature,
         order: (creature.birthId + model.productionPulseId * 17) % 997,
@@ -310,7 +318,7 @@ function App() {
       .map(({ creature }) => creature);
     const timeouts: number[] = [];
 
-    for (const creature of visibleCreatures) {
+    for (const creature of burstCreatures) {
       const amount = Math.floor(creatureDefinitions[creature.creatureId].coinsPerSecond);
       const burstId = Date.now() + creature.birthId;
       const visualDelay = (creature.birthId * 37 + model.productionPulseId * 113) % 760;
@@ -339,7 +347,7 @@ function App() {
     return () => {
       for (const timeout of timeouts) window.clearTimeout(timeout);
     };
-  }, [model.productionPulseId, model.state.creatures]);
+  }, [model.productionPulseId, visibleCreatures]);
 
   useEffect(() => {
     requestPortraitOrientationLock();
@@ -492,10 +500,10 @@ function App() {
 
     const dragged =
       dragState.kind === 'creature'
-        ? model.state.creatures.find((creature) => creature.instanceId === dragState.instanceId)
+        ? visibleCreatures.find((creature) => creature.instanceId === dragState.instanceId)
         : null;
     const target = targetInstanceId
-      ? model.state.creatures.find((creature) => creature.instanceId === targetInstanceId)
+      ? visibleCreatures.find((creature) => creature.instanceId === targetInstanceId)
       : null;
 
     setDragState(null);
@@ -510,8 +518,8 @@ function App() {
     if (merge.status === 'success') {
       if (
         isFinalMapOneNaturalMergeResult(merge.resultCreatureId) &&
-        model.state.portalState !== 'charged' &&
-        model.state.portalState !== 'active'
+        model.state.portalState !== 'awaiting_transition' &&
+        model.state.portalState !== 'open'
       ) {
         dispatch({
           type: 'blockedMerge',
@@ -555,9 +563,9 @@ function App() {
     if (!dragState) return;
 
     recordInteraction();
-    if (environmentId === 'portal' && model.state.portalState === 'active') {
+    if (environmentId === 'portal' && model.state.portalState === 'open') {
       setDragState(null);
-      dispatch({ type: 'showToast', message: 'O portal já está ativo.' });
+      dispatch({ type: 'showToast', message: 'O portal já está aberto.' });
       return;
     }
 
@@ -777,7 +785,7 @@ function App() {
   ]);
 
   useEffect(() => {
-    const hint = findEnvironmentalHint(model.state.creatures);
+    const hint = findEnvironmentalHint(visibleCreatures);
     if (!hint) return;
     const activeHint = hint;
 
@@ -885,8 +893,8 @@ function App() {
       >
         <div className="sceneLayer" aria-hidden="true" />
         <GameBoard
-          creatures={model.state.creatures}
-          eggs={model.state.eggs}
+          creatures={visibleCreatures}
+          eggs={visibleEggs}
           dragState={dragState}
           dragWorldPosition={dragWorldPosition}
           collectionBursts={collectionBursts}
@@ -901,25 +909,25 @@ function App() {
         <div className="hudLayer">
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
         <AccountButton syncStatus={syncStatus} />
-        <EggTimer remainingSeconds={eggTimerSeconds} />
+        {model.state.currentMapId === 'map1' ? <EggTimer remainingSeconds={eggTimerSeconds} /> : null}
         <button
           className="portalDropZone"
           type="button"
           data-environment-id="portal"
-          aria-label={model.state.portalState === 'active' ? 'Abrir Mapa 2' : 'Portal'}
+          aria-label={model.state.portalState === 'open' ? 'Trocar mapa' : 'Portal'}
           onClick={() => {
-            if (model.state.portalState === 'active' && !dragState) {
-              setIsMapPreviewOpen(true);
+            if (model.state.portalState === 'open' && !dragState) {
+              dispatch({ type: 'switchMap' });
             }
           }}
         />
-        {model.state.portalState === 'dormant' ? (
+        {model.state.currentMapId === 'map1' && model.state.portalState === 'dormant' ? (
           <div className="portalHint" aria-hidden="true" />
         ) : null}
-        {model.state.portalState !== 'dormant' ? (
+        {model.state.currentMapId === 'map1' && model.state.portalState !== 'dormant' ? (
           <div
             className={`portalMeter ${
-              model.state.portalState === 'active' ? 'portalMeter--active' : ''
+              model.state.portalState === 'open' ? 'portalMeter--active' : ''
             }`}
             aria-label="Energia do portal"
           >
@@ -931,13 +939,13 @@ function App() {
                     ? `Requer: ${portalRequestDefinition.name} ${portalRequest.deliveredCount}/${portalRequest.requiredCount}`
                     : 'O portal está faminto...'}
               </span>
-            ) : model.state.portalState === 'charged' ? (
-              <span className="portalMeter__message">O portal está estabilizado... Algo ainda falta.</span>
+            ) : model.state.portalState === 'awaiting_transition' ? (
+              <span className="portalMeter__message">Portal estabilizado. Uma anomalia precisa atravessá-lo.</span>
             ) : null}
             <p>
-              {model.state.portalState === 'active' ? <span>Portal ativo</span> : null}
+              {model.state.portalState === 'open' ? <span>Portal aberto</span> : null}
               <strong>
-                {model.state.portalState === 'active'
+                {model.state.portalState === 'open'
                   ? 'Mapa 2'
                   : `${model.state.portalEnergy}/${model.state.portalEnergyRequired}`}
               </strong>
@@ -946,7 +954,7 @@ function App() {
               style={
                 {
                   '--portal-progress': `${
-                    model.state.portalState === 'active' ? 100 : portalProgress
+                    model.state.portalState === 'open' ? 100 : portalProgress
                   }%`,
                 } as React.CSSProperties
               }
@@ -960,6 +968,7 @@ function App() {
           </p>
         ) : null}
 
+        {model.state.currentMapId === 'map1' ? (
         <div className="actionBar">
           <BuyCreatureButton
             isHighlighted={guidedTutorialStep === 'buyEgg'}
@@ -969,6 +978,7 @@ function App() {
             }}
           />
         </div>
+        ) : null}
 
         <aside className="sideActions" aria-label="Ações">
           <button className="iconTile" type="button" onClick={() => setIsDexOpen(true)}>
@@ -1211,24 +1221,6 @@ function App() {
                 Vender
               </button>
             </div>
-          </section>
-        </div>
-      ) : null}
-
-      {isMapPreviewOpen ? (
-        <div className="modalBackdrop" role="presentation">
-          <section
-            className="modal compactConfirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="map-preview-title"
-          >
-            <p className="modal__eyebrow">Portal ativo</p>
-            <h2 id="map-preview-title">Mapa 2</h2>
-            <p>Em breve...</p>
-            <button className="primaryButton" type="button" onClick={() => setIsMapPreviewOpen(false)}>
-              OK
-            </button>
           </section>
         </div>
       ) : null}

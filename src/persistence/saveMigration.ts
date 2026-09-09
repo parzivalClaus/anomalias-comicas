@@ -8,11 +8,12 @@ import type {
   PortalState,
   SaveOwnerType,
   VersionedGameSave,
+  MapId,
 } from '../types/game';
 import { decayEggPurchasePressure, getEggPurchasePrice, getTotalProductionPerSecond } from '../utils/economy';
 import { advancePortalRequestCooldown, startPortalRequest } from '../utils/portalRequests';
 
-export const currentSaveVersion = 11;
+export const currentSaveVersion = 12;
 
 function isGameState(value: unknown): value is GameState {
   if (!value || typeof value !== 'object') return false;
@@ -59,7 +60,11 @@ function isCreatureId(value: unknown): value is CreatureId {
     value === 'umbrelume' ||
     value === 'neburix' ||
     value === 'gravulon' ||
-    value === 'singulume'
+    value === 'singulume' ||
+    value === 'astralume' ||
+    value === 'cosmoryx' ||
+    value === 'nexoryx' ||
+    value === 'translume'
   );
 }
 
@@ -74,7 +79,24 @@ function isGuidedTutorialStep(value: unknown): value is GuidedTutorialStep {
 }
 
 function isPortalState(value: unknown): value is PortalState {
-  return value === 'dormant' || value === 'cracked' || value === 'charged' || value === 'active';
+  return (
+    value === 'dormant' ||
+    value === 'cracked' ||
+    value === 'awaiting_transition' ||
+    value === 'open'
+  );
+}
+
+function normalizePortalState(value: unknown, discoveredCreatureIds: CreatureId[]): PortalState {
+  if (value === 'active') return 'open';
+  if (value === 'charged') return 'awaiting_transition';
+  if (isPortalState(value)) return value;
+
+  return discoveredCreatureIds.includes('umbrelume') ? 'cracked' : 'dormant';
+}
+
+function isMapId(value: unknown): value is MapId {
+  return value === 'map1' || value === 'map2';
 }
 
 function isPortalRequestState(value: unknown): value is PortalRequestState {
@@ -114,6 +136,7 @@ function normalizeWorldEntities(state: GameState) {
 
       return {
         ...rest,
+        mapId: isMapId(creature.mapId) ? creature.mapId : 'map1',
         ...normalizeEntityPosition(creature),
         velocityX: creature.velocityX ?? getVelocity(creature.birthId ?? index).velocityX,
         velocityY: creature.velocityY ?? getVelocity(creature.birthId ?? index).velocityY,
@@ -126,6 +149,7 @@ function normalizeWorldEntities(state: GameState) {
     .slice(0, remainingCapacity)
     .map((egg, index) => ({
       ...egg,
+      mapId: isMapId(egg.mapId) ? egg.mapId : 'map1',
       ...normalizeEntityPosition(egg),
       birthId: egg.birthId ?? Date.now() + creatures.length + index,
       source: egg.source ?? 'free',
@@ -142,17 +166,12 @@ function normalizeState(state: GameState): GameState {
   );
   const occupancy = normalizeWorldEntities(state);
   const creatures = occupancy.creatures;
-  const legacyPortalState =
-    isPortalState(state.portalState)
-      ? state.portalState
-      : state.discoveredCreatureIds.includes('umbrelume')
-        ? 'cracked'
-        : 'dormant';
+  const legacyPortalState = normalizePortalState(state.portalState, state.discoveredCreatureIds);
   const portalEnergyRequired = state.portalEnergyRequired ?? gameConfig.portalEnergyRequired;
   const portalEnergy = Math.min(state.portalEnergy ?? 0, portalEnergyRequired);
   const portalState =
     legacyPortalState === 'cracked' && portalEnergy >= portalEnergyRequired
-      ? 'charged'
+      ? 'awaiting_transition'
       : legacyPortalState;
   const currentIncomePerSecond = getTotalProductionPerSecond({ ...state, creatures, portalState });
   const secondsSinceLastSave = Math.max(0, Math.floor((Date.now() - state.lastSavedAt) / 1000));
@@ -195,7 +214,7 @@ function normalizeState(state: GameState): GameState {
     portalEnergyRequired,
     portalRequestState: isPortalRequestState(state.portalRequestState)
       ? state.portalRequestState
-      : portalState === 'charged'
+      : portalState === 'awaiting_transition'
         ? 'charged'
         : null,
     activePortalRequest: isPortalRequest(state.activePortalRequest)
@@ -215,14 +234,24 @@ function normalizeState(state: GameState): GameState {
       typeof state.lastRequestedTier === 'number' ? state.lastRequestedTier : null,
     sameTierRequestStreak:
       typeof state.sameTierRequestStreak === 'number' ? state.sameTierRequestStreak : 0,
-    unlockedMapIds: state.unlockedMapIds ?? ['map1'],
-    currentMapId: state.currentMapId ?? 'map1',
+    unlockedMapIds: Array.from(
+      new Set([
+        'map1' as MapId,
+        ...(state.unlockedMapIds ?? []),
+        ...(portalState === 'open' ? (['map2'] as MapId[]) : []),
+      ]),
+    ),
+    currentMapId: isMapId(state.currentMapId)
+      ? portalState === 'open' || state.currentMapId === 'map1'
+        ? state.currentMapId
+        : 'map1'
+      : 'map1',
     remainingEggSpawnSeconds,
     offlineProductionCapSeconds:
       state.offlineProductionCapSeconds ?? gameConfig.offlineRewardCapSeconds,
   };
 
-  if (baseState.portalState === 'charged') {
+  if (baseState.portalState === 'awaiting_transition') {
     return {
       ...baseState,
       portalRequestState: 'charged',
@@ -274,7 +303,7 @@ export function migrateSave(value: unknown): VersionedGameSave | null {
 
   if ('saveVersion' in value && 'state' in value) {
     const versioned = value as VersionedGameSave;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
       return null;
     }
 
