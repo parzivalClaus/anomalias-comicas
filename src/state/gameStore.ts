@@ -367,7 +367,7 @@ function scheduleNextSolarExposureCheck(state: GameState, from = Date.now()) {
   return {
     ...state,
     solarExposureEndsAt: null,
-    solarExposureNextCheckAt: from + gameConfig.solarExposure.minIntervalSeconds * 1000,
+    solarExposureNextCheckAt: from + gameConfig.solarRadiation.exposure.minIntervalSeconds * 1000,
   };
 }
 
@@ -386,7 +386,8 @@ function advanceSolarExposure(state: GameState, now = Date.now(), canStartNewExp
   }
 
   const nextCheckAt =
-    state.solarExposureNextCheckAt ?? now + gameConfig.solarExposure.minIntervalSeconds * 1000;
+    state.solarExposureNextCheckAt ??
+    now + gameConfig.solarRadiation.exposure.minIntervalSeconds * 1000;
   if (!canStartNewExposure || now < nextCheckAt) {
     return {
       ...state,
@@ -396,20 +397,21 @@ function advanceSolarExposure(state: GameState, now = Date.now(), canStartNewExp
 
   const hasDiscoveredSolaris = state.discoveredCreatureIds.includes('solaris');
   const chance = hasDiscoveredSolaris
-    ? gameConfig.solarExposure.normalEventChance
-    : gameConfig.solarExposure.firstDiscoveryEventChance;
+    ? gameConfig.solarRadiation.exposure.eventChance
+    : gameConfig.solarRadiation.exposure.firstDiscoveryEventChance;
 
   if (Math.random() < chance) {
     return {
       ...state,
-      solarExposureEndsAt: now + gameConfig.solarExposure.durationSeconds * 1000,
+      solarExposureEndsAt: now + gameConfig.solarRadiation.exposure.durationSeconds * 1000,
       solarExposureNextCheckAt: null,
     };
   }
 
   return {
     ...state,
-    solarExposureNextCheckAt: now + gameConfig.solarExposure.checkIntervalSeconds * 1000,
+    solarExposureNextCheckAt:
+      now + gameConfig.solarRadiation.exposure.checkIntervalSeconds * 1000,
   };
 }
 
@@ -423,7 +425,7 @@ function resolveSolarMutation(
   normalCreatureId: CreatureId | null,
   now = Date.now(),
 ) {
-  if (!eggCanMutateToSolaris(egg, normalCreatureId) || !solarExposureIsActive(state, now)) {
+  if (!eggCanMutateToSolaris(egg, normalCreatureId) || !solarExposureIsUnlocked(state)) {
     return {
       creatureId: null,
       pityAttempts: state.solarFirstDiscoveryPityAttempts,
@@ -437,9 +439,12 @@ function resolveSolarMutation(
     : state.solarFirstDiscoveryPityAttempts + 1;
   const forcedByPity =
     !hasDiscoveredSolaris &&
-    nextPityAttempts >= gameConfig.solarExposure.firstDiscoveryPityAttempts;
+    nextPityAttempts >= gameConfig.solarRadiation.firstDiscovery.pityAttempts;
+  const mutationChance = solarExposureIsActive(state, now)
+    ? gameConfig.solarRadiation.exposure.mutationChance
+    : gameConfig.solarRadiation.baseMutationChance;
   const didMutate =
-    forcedByPity || Math.random() < gameConfig.solarExposure.mutationChance;
+    forcedByPity || Math.random() < mutationChance;
 
   return {
     creatureId: didMutate ? ('solaris' as CreatureId) : null,

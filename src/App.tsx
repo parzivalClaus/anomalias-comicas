@@ -252,7 +252,12 @@ function App() {
     ? Math.max(0, Math.ceil((model.state.solarExposureEndsAt - Date.now()) / 1000))
     : 0;
   const isSolarExposureActive = solarExposureRemainingSeconds > 0;
-  const solarMutationPercent = Math.round(gameConfig.solarExposure.mutationChance * 100);
+  const isSolarRadiationUnlocked =
+    model.state.portalState === 'open' && model.state.unlockedMapIds.includes('map2');
+  const currentSolarMutationChance = isSolarExposureActive
+    ? gameConfig.solarRadiation.exposure.mutationChance
+    : gameConfig.solarRadiation.baseMutationChance;
+  const solarMutationPercent = Math.round(currentSolarMutationChance * 100);
   const hasDiscoveredSolaris = model.state.discoveredCreatureIds.includes('solaris');
   const { user, isConfigured, isLoading: isAuthLoading } = useAuth();
   const { syncStatus, hasResolvedInitialSync } = useCloudSync({
@@ -324,8 +329,8 @@ function App() {
   }, [model.soundCue]);
 
   useEffect(() => {
-    if (!isSolarExposureActive) setIsSolarExposureInfoOpen(false);
-  }, [isSolarExposureActive]);
+    if (!isSolarRadiationUnlocked) setIsSolarExposureInfoOpen(false);
+  }, [isSolarRadiationUnlocked]);
 
   useEffect(() => {
     if (model.productionPulseId === lastRenderedProductionPulseRef.current) return;
@@ -1049,9 +1054,13 @@ function App() {
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
         <AccountButton syncStatus={syncStatus} />
         {model.state.currentMapId === 'map1' ? <EggTimer remainingSeconds={eggTimerSeconds} /> : null}
-        {isSolarExposureActive ? (
+        {isSolarRadiationUnlocked ? (
           <div
-            className={`solarExposure ${isSolarExposureInfoOpen ? 'solarExposure--open' : ''}`}
+            className={[
+              'solarExposure',
+              isSolarExposureActive ? 'solarExposure--active' : '',
+              isSolarExposureInfoOpen ? 'solarExposure--open' : '',
+            ].join(' ')}
             onMouseEnter={() => setIsSolarExposureInfoOpen(true)}
             onMouseLeave={() => setIsSolarExposureInfoOpen(false)}
           >
@@ -1059,20 +1068,27 @@ function App() {
               className="solarExposure__button"
               type="button"
               aria-expanded={isSolarExposureInfoOpen}
-              aria-label="Exposição Solar"
+              aria-label={isSolarExposureActive ? 'Exposição Solar' : 'Radiação Solar'}
               onClick={() => setIsSolarExposureInfoOpen((current) => !current)}
             >
               <img src="/ui/sun-exposure.png" alt="" />
               <span>
-                <strong>Exposição Solar</strong>
-                <small>{formatShortTimer(solarExposureRemainingSeconds)}</small>
+                <strong>{isSolarExposureActive ? 'Exposição Solar' : 'Radiação Solar'}</strong>
+                <small>
+                  {isSolarExposureActive
+                    ? formatShortTimer(solarExposureRemainingSeconds)
+                    : 'Estável'}
+                </small>
               </span>
             </button>
             {isSolarExposureInfoOpen ? (
               <div className="solarExposure__popover" role="status">
-                <strong>Exposição Solar</strong>
+                <strong>{isSolarExposureActive ? 'Exposição Solar' : 'Radiação Solar'}</strong>
                 <p>
-                  A radiação de Heliora está atravessando o portal. Ovos Cósmicos têm{' '}
+                  {isSolarExposureActive
+                    ? 'A radiação de Heliora está temporariamente mais intensa.'
+                    : 'A radiação de Heliora atravessa o portal.'}{' '}
+                  Ovos Cósmicos têm{' '}
                   {solarMutationPercent}% de chance de{' '}
                   {hasDiscoveredSolaris
                     ? 'gerar Solaris.'
