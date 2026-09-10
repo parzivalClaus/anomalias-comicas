@@ -1,4 +1,4 @@
-import type { EggHatchConfig } from '../types/game';
+import type { CreatureId, EggHatchConfig } from '../types/game';
 
 const defaultEggHatchConfig: EggHatchConfig = {
   allowedStages: [1],
@@ -21,6 +21,10 @@ const astralumeProduction = nextNaturalMergeProduction(PRODUCTION_PER_SECOND.sin
 const cosmoryxProduction = nextNaturalMergeProduction(astralumeProduction);
 const nexoryxProduction = nextNaturalMergeProduction(cosmoryxProduction);
 const translumeProduction = nextNaturalMergeProduction(nexoryxProduction);
+const solarisProduction = 2;
+const solumeProduction = nextNaturalMergeProduction(solarisProduction);
+const helionProduction = nextNaturalMergeProduction(solumeProduction);
+const coralumeProduction = nextNaturalMergeProduction(helionProduction);
 
 const ADVANCED_PRODUCTION_PER_SECOND = {
   astralume: astralumeProduction,
@@ -94,7 +98,10 @@ export const ECONOMY_BALANCE = {
   productionPerSecond: {
     ...PRODUCTION_PER_SECOND,
     ...ADVANCED_PRODUCTION_PER_SECOND,
-    solaris: 2,
+    solaris: solarisProduction,
+    solume: solumeProduction,
+    helion: helionProduction,
+    coralume: coralumeProduction,
   },
 } as const;
 
@@ -105,6 +112,25 @@ export const MAP_CONFIG = {
   },
   map2: {
     minNaturalTier: 11,
+  },
+} as const;
+
+type StoreFamilyRule = {
+  enabled: boolean;
+  unlockLagTiers: number;
+  requiresBaseDiscovery: CreatureId | null;
+};
+
+export const STORE_FAMILY_RULES: Record<string, StoreFamilyRule> = {
+  nebulo: {
+    enabled: true,
+    unlockLagTiers: 4,
+    requiresBaseDiscovery: null,
+  },
+  solar: {
+    enabled: false,
+    unlockLagTiers: 4,
+    requiresBaseDiscovery: 'solaris',
   },
 } as const;
 
@@ -150,6 +176,7 @@ export const gameConfig = {
   portalRequests: ECONOMY_BALANCE.portalRequests,
   solarRadiation: ECONOMY_BALANCE.solarRadiation,
   mapConfig: MAP_CONFIG,
+  storeFamilyRules: STORE_FAMILY_RULES,
   criticalProductionPerSecond: ECONOMY_BALANCE.criticalProductionPerSecond,
   autosaveMs: 2500,
   cloudSyncMs: 15000,

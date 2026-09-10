@@ -13,7 +13,7 @@ import type {
 import { decayEggPurchasePressure, getEggPurchasePrice, getTotalProductionPerSecond } from '../utils/economy';
 import { advancePortalRequestCooldown, startPortalRequest } from '../utils/portalRequests';
 
-export const currentSaveVersion = 14;
+export const currentSaveVersion = 15;
 
 function isGameState(value: unknown): value is GameState {
   if (!value || typeof value !== 'object') return false;
@@ -65,7 +65,10 @@ function isCreatureId(value: unknown): value is CreatureId {
     value === 'cosmoryx' ||
     value === 'nexoryx' ||
     value === 'translume' ||
-    value === 'solaris'
+    value === 'solaris' ||
+    value === 'solume' ||
+    value === 'helion' ||
+    value === 'coralume'
   );
 }
 
@@ -333,7 +336,7 @@ export function migrateSave(value: unknown): VersionedGameSave | null {
 
   if ('saveVersion' in value && 'state' in value) {
     const versioned = value as VersionedGameSave;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
       return null;
     }
 

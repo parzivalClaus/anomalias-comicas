@@ -42,11 +42,36 @@ export function getHighestDiscoveredNaturalTier(discoveredCreatureIds: CreatureI
   }, 0);
 }
 
+function getHighestDiscoveredNaturalTierForFamily(
+  discoveredCreatureIds: CreatureId[],
+  familyId: string,
+) {
+  return discoveredCreatureIds.reduce((highestTier, creatureId) => {
+    const definition = creatureDefinitions[creatureId];
+    if (definition?.familyId !== familyId) return highestTier;
+
+    return Math.max(highestTier, definition.naturalTier ?? 0);
+  }, 0);
+}
+
+function getStoreFamilyRule(familyId: string) {
+  return gameConfig.storeFamilyRules[familyId as keyof typeof gameConfig.storeFamilyRules] ?? null;
+}
+
 export function canBuyCreatureFromStore(
   definition: CreatureDefinition,
   state: Pick<GameState, 'discoveredCreatureIds' | 'currentMapId'>,
 ) {
   if (!definition.purchasable || definition.naturalTier === null) return false;
+  const familyRule = getStoreFamilyRule(definition.familyId);
+  if (!familyRule?.enabled) return false;
+  if (
+    familyRule.requiresBaseDiscovery &&
+    !state.discoveredCreatureIds.includes(familyRule.requiresBaseDiscovery as CreatureId)
+  ) {
+    return false;
+  }
+
   const maxTierForMap =
     state.currentMapId === 'map1'
       ? gameConfig.mapConfig.map1.maxNaturalTier
@@ -60,8 +85,11 @@ export function canBuyCreatureFromStore(
 
   if (definition.startsUnlockedInShop) return state.currentMapId === 'map1';
 
-  const highestDiscoveredTier = getHighestDiscoveredNaturalTier(state.discoveredCreatureIds);
-  return definition.naturalTier <= highestDiscoveredTier - (gameConfig.storeUnlockGap - 1);
+  const highestDiscoveredTier = getHighestDiscoveredNaturalTierForFamily(
+    state.discoveredCreatureIds,
+    definition.familyId,
+  );
+  return definition.naturalTier <= highestDiscoveredTier - familyRule.unlockLagTiers;
 }
 
 export function getStoreCreatureOptions(state: GameState) {
@@ -75,7 +103,9 @@ export function getStoreCreatureOptions(state: GameState) {
       purchaseCount: state.purchaseCounts[definition.id] ?? 0,
       requiredTier: definition.startsUnlockedInShop
         ? null
-        : (definition.naturalTier ?? 0) + gameConfig.storeUnlockGap - 1,
+        : (definition.naturalTier ?? 0) +
+          (getStoreFamilyRule(definition.familyId)?.unlockLagTiers ??
+            gameConfig.storeUnlockGap - 1),
     }));
 }
 

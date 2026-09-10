@@ -1,4 +1,5 @@
 import { evolutionRecipes } from '../data/evolutions';
+import { creatureDefinitions } from '../data/creatures';
 import type { CreatureInstance, CreatureId, EvolutionCondition } from '../types/game';
 
 type MergeEvaluation =
@@ -7,7 +8,10 @@ type MergeEvaluation =
   | { status: 'none' };
 
 function recipeMatches(inputs: [CreatureId, CreatureId], dragged: CreatureId, target: CreatureId) {
-  return inputs.includes(dragged) && inputs.includes(target);
+  return (
+    (inputs[0] === dragged && inputs[1] === target) ||
+    (inputs[0] === target && inputs[1] === dragged)
+  );
 }
 
 interface MergeContext {
@@ -29,7 +33,19 @@ export function evaluateMerge(
     recipeMatches(item.inputs, dragged.creatureId, target.creatureId),
   );
 
-  if (!recipe) return { status: 'none' };
+  if (!recipe) {
+    const draggedDefinition = creatureDefinitions[dragged.creatureId];
+    const targetDefinition = creatureDefinitions[target.creatureId];
+    const isCappedNaturalMerge =
+      dragged.creatureId === target.creatureId &&
+      draggedDefinition.familyId === targetDefinition.familyId &&
+      draggedDefinition.naturalTier !== null &&
+      draggedDefinition.naturalTier === targetDefinition.naturalTier;
+
+    return isCappedNaturalMerge
+      ? { status: 'blocked', message: 'Essa evolução ainda não está disponível.' }
+      : { status: 'none' };
+  }
 
   const context: MergeContext = {
     dragged,

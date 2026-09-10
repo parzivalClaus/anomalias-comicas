@@ -8,6 +8,9 @@ import neburixImage from '../assets/creatures/neburix.png';
 import nexoryxImage from '../assets/creatures/Nexoryx.png';
 import singulumeImage from '../assets/creatures/singulume.png';
 import solarisImage from '../assets/creatures/solaris.png';
+import solumeImage from '../assets/creatures/solume.png';
+import helionImage from '../assets/creatures/helion.png';
+import coralumeImage from '../assets/creatures/coralume.png';
 import translumeImage from '../assets/creatures/translume.png';
 import umbrelumeImage from '../assets/creatures/umbrelume.png';
 import { ECONOMY_BALANCE } from './gameConfig';
@@ -251,7 +254,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     tier: 1,
     image: solarisImage,
     coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.solaris,
-    purchasable: false,
+    purchasable: true,
     familyId: 'solar',
     naturalTier: 1,
     progressionType: 'natural',
@@ -262,6 +265,66 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
       'Uma anomalia solar nascida quando a radiação de Heliora atravessou o portal e alterou um Ovo Cósmico em Nébora.',
     undiscoveredHint:
       'Algumas ondas vindas de Heliora parecem alterar a origem de certos Ovos Cósmicos.',
+    idleAnimation: 'breathe',
+    effect: 'bubbles',
+  },
+  solume: {
+    id: 'solume',
+    dexNumber: 13,
+    name: 'Solume',
+    tier: 2,
+    image: solumeImage,
+    coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.solume,
+    purchasable: true,
+    familyId: 'solar',
+    naturalTier: 2,
+    progressionType: 'natural',
+    portalEnergyValue: 8,
+    stage: 2,
+    canHatchFromCosmicEgg: false,
+    description:
+      'A primeira evolução da linhagem Solar. Seu núcleo pulsa como uma pequena estrela aprendendo a sustentar a própria luz.',
+    undiscoveredHint: 'Solaris semelhantes talvez reforcem a mesma chama.',
+    idleAnimation: 'breathe',
+    effect: 'bubbles',
+  },
+  helion: {
+    id: 'helion',
+    dexNumber: 14,
+    name: 'Helion',
+    tier: 3,
+    image: helionImage,
+    coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.helion,
+    purchasable: true,
+    familyId: 'solar',
+    naturalTier: 3,
+    progressionType: 'natural',
+    portalEnergyValue: 18,
+    stage: 3,
+    canHatchFromCosmicEgg: false,
+    description:
+      'Uma anomalia solar mais intensa, marcada por calor vivo e por um símbolo radiante que parece responder ao céu de Heliora.',
+    undiscoveredHint: 'Solumes em ressonância talvez revelem uma forma solar mais intensa.',
+    idleAnimation: 'breathe',
+    effect: 'bubbles',
+  },
+  coralume: {
+    id: 'coralume',
+    dexNumber: 15,
+    name: 'Coralume',
+    tier: 4,
+    image: coralumeImage,
+    coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.coralume,
+    purchasable: true,
+    familyId: 'solar',
+    naturalTier: 4,
+    progressionType: 'natural',
+    portalEnergyValue: 38,
+    stage: 4,
+    canHatchFromCosmicEgg: false,
+    description:
+      'Uma forma solar estável e coroada por uma radiação clara. Sua luz se espalha em pequenos arcos ao redor do corpo.',
+    undiscoveredHint: 'Helions em ressonância talvez sustentem uma coroa solar mais estável.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
   },
