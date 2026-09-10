@@ -92,7 +92,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 4,
     canHatchFromCosmicEgg: false,
     description:
-      'Uma anomalia que parece ter atravessado algo maior do que uma simples fusão. Por alguns instantes, a estrutura adormecida respondeu.',
+      'Uma anomalia instável criada pela interação entre um Nebulux e o portal adormecido. Sua energia foi absorvida durante a primeira ruptura do portal.',
     undiscoveredHint:
       'A estrutura adormecida emite pulsos quando esta anomalia se aproxima.',
     idleAnimation: 'breathe',

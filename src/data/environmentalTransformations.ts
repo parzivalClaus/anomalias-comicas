@@ -5,5 +5,7 @@ export const environmentalTransformations: EnvironmentalTransformation[] = [
     input: 'nebulux',
     environmentId: 'portal',
     result: 'umbrelume',
+    allowedPortalStates: ['dormant'],
+    oncePerSave: true,
   },
 ];

@@ -45,6 +45,7 @@ import { evolutionRecipes } from './data/evolutions';
 
 const boardBackgrounds = {
   dormant: '/backgrounds/game-board.png',
+  rupturing: '/backgrounds/game-board.png',
   cracked: '/backgrounds/game-board-portal-cracked.png',
   awaiting_transition: '/backgrounds/game-board-portal-cracked.png',
   open: '/backgrounds/game-board-portal-open.png',
@@ -718,12 +719,17 @@ function App() {
     setDragState(null);
     if (!dragged) return;
 
+    if (environmentId === 'portal' && model.state.portalState === 'rupturing') {
+      dispatch({ type: 'showToast', message: 'O portal está absorvendo uma anomalia.' });
+      return;
+    }
+
     if (environmentId === 'portal' && model.state.portalState !== 'dormant') {
       dispatch({ type: 'deliverPortalRequest', instanceId: dragged.instanceId });
       return;
     }
 
-    const transformation = evaluateEnvironmentalTransformation(dragged, environmentId);
+    const transformation = evaluateEnvironmentalTransformation(dragged, environmentId, model.state);
     if (transformation.status !== 'success') {
       dispatch({ type: 'showToast', message: 'Nada respondeu.' });
       return;
@@ -812,6 +818,16 @@ function App() {
     const timeout = window.setTimeout(() => setIsPortalReacting(false), 1700);
     return () => window.clearTimeout(timeout);
   }, [model.portalPulseId]);
+
+  useEffect(() => {
+    if (model.state.portalState !== 'rupturing') return;
+
+    const timeout = window.setTimeout(() => {
+      dispatch({ type: 'completeUmbrelumeSacrifice' });
+    }, 1450);
+
+    return () => window.clearTimeout(timeout);
+  }, [model.state.portalState]);
 
   useEffect(() => {
     setVisibleDiscoveryId(null);
@@ -921,7 +937,7 @@ function App() {
   ]);
 
   useEffect(() => {
-    const hint = findEnvironmentalHint(visibleCreatures);
+    const hint = findEnvironmentalHint(visibleCreatures, model.state);
     if (!hint) return;
     const activeHint = hint;
 
@@ -949,14 +965,17 @@ function App() {
       if (pulseTimeout !== null) window.clearTimeout(pulseTimeout);
       if (pauseTimeout !== null) window.clearTimeout(pauseTimeout);
     };
-  }, [environmentalHintSignature]);
+  }, [environmentalHintSignature, model.state.portalState]);
 
   if (isHydrating || isInitialAuthSigningIn) {
     return (
       <main className="startupScreen" aria-busy="true">
         <section className="startupPanel" aria-live="polite">
-          <p className="modal__eyebrow">Anomalias Cósmicas</p>
-          <h1>Anomalias Cósmicas</h1>
+          <img
+            className="brandLogo brandLogo--startup"
+            src="/branding/logo-runtime.png"
+            alt="Anomalias Cósmicas"
+          />
           <span className="startupSpinner" aria-hidden="true" />
           <p>Sincronizando...</p>
         </section>
@@ -973,6 +992,11 @@ function App() {
           aria-modal="true"
           aria-labelledby="auth-start-title"
         >
+          <img
+            className="brandLogo brandLogo--modal"
+            src="/branding/logo-runtime.png"
+            alt="Anomalias Cósmicas"
+          />
           <span className="cloudSavePrompt__icon" aria-hidden="true">
             <Cloud size={28} />
           </span>
@@ -1111,8 +1135,8 @@ function App() {
           <div className="portalHint" aria-hidden="true" />
         ) : null}
         {model.state.currentMapId === 'map1' &&
-        model.state.portalState !== 'dormant' &&
-        model.state.portalState !== 'open' ? (
+        (model.state.portalState === 'cracked' ||
+          model.state.portalState === 'awaiting_transition') ? (
           <div
             className="portalMeter"
             aria-label="Energia do portal"
@@ -1269,7 +1293,11 @@ function App() {
             aria-modal="true"
             aria-labelledby="welcome-title"
           >
-            <p className="modal__eyebrow">Anomalias Cósmicas</p>
+            <img
+              className="brandLogo brandLogo--modal"
+              src="/branding/logo-runtime.png"
+              alt="Anomalias Cósmicas"
+            />
             <h2 id="welcome-title">Bem-vindo ao desconhecido! ✨</h2>
             <p>
               Crie anomalias, <strong>combine, misture e experimente</strong>. Descubra novas

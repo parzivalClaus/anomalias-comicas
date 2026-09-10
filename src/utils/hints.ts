@@ -1,6 +1,6 @@
 import { evolutionRecipes } from '../data/evolutions';
 import { environmentalTransformations } from '../data/environmentalTransformations';
-import type { CreatureInstance, EnvironmentId } from '../types/game';
+import type { CreatureInstance, EnvironmentId, GameState } from '../types/game';
 import { evaluateMerge } from './merge';
 
 export interface MergeTutorialHint {
@@ -42,12 +42,26 @@ export function findMergeTutorialHint(creatures: CreatureInstance[]): MergeTutor
   return null;
 }
 
-export function findEnvironmentalHint(creatures: CreatureInstance[]): EnvironmentalHint | null {
+export function findEnvironmentalHint(
+  creatures: CreatureInstance[],
+  state?: Pick<GameState, 'discoveredCreatureIds' | 'portalState'>,
+): EnvironmentalHint | null {
+  const availableTransformations = environmentalTransformations.filter(
+    (transformation) =>
+      !transformation.allowedPortalStates ||
+      !state ||
+      transformation.allowedPortalStates.includes(state.portalState),
+  ).filter(
+    (transformation) =>
+      !transformation.oncePerSave ||
+      !state ||
+      !state.discoveredCreatureIds.includes(transformation.result),
+  );
   const hintedCreatureIds = new Set(
-    environmentalTransformations.map((transformation) => transformation.input),
+    availableTransformations.map((transformation) => transformation.input),
   );
   const environmentIds = new Set(
-    environmentalTransformations.map((transformation) => transformation.environmentId),
+    availableTransformations.map((transformation) => transformation.environmentId),
   );
   const creatureInstanceIds = creatures
     .filter((creature) => hintedCreatureIds.has(creature.creatureId))

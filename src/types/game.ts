@@ -14,7 +14,7 @@ export type CreatureId =
 export type EvolutionConditionType = 'portal_influence';
 export type EnvironmentId = 'portal';
 export type ProgressionType = 'natural' | 'environmental';
-export type PortalState = 'dormant' | 'cracked' | 'awaiting_transition' | 'open';
+export type PortalState = 'dormant' | 'rupturing' | 'cracked' | 'awaiting_transition' | 'open';
 export type PortalRequestState = 'active' | 'cooldown' | 'charged';
 export type MapId = 'map1' | 'map2';
 export type EggSource = 'free' | 'purchased';
@@ -60,6 +60,8 @@ export interface EnvironmentalTransformation {
   input: CreatureId;
   environmentId: EnvironmentId;
   result: CreatureId;
+  allowedPortalStates?: PortalState[];
+  oncePerSave?: boolean;
 }
 
 export interface EggHatchConfig {
@@ -140,7 +142,7 @@ export interface OfflineReward {
 }
 
 export interface VersionedGameSave {
-  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
   state: GameState;
   updatedAt: string;
   ownerType: SaveOwnerType;

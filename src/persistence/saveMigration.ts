@@ -13,7 +13,7 @@ import type {
 import { decayEggPurchasePressure, getEggPurchasePrice, getTotalProductionPerSecond } from '../utils/economy';
 import { advancePortalRequestCooldown, startPortalRequest } from '../utils/portalRequests';
 
-export const currentSaveVersion = 13;
+export const currentSaveVersion = 14;
 
 function isGameState(value: unknown): value is GameState {
   if (!value || typeof value !== 'object') return false;
@@ -82,6 +82,7 @@ function isGuidedTutorialStep(value: unknown): value is GuidedTutorialStep {
 function isPortalState(value: unknown): value is PortalState {
   return (
     value === 'dormant' ||
+    value === 'rupturing' ||
     value === 'cracked' ||
     value === 'awaiting_transition' ||
     value === 'open'
@@ -166,14 +167,33 @@ function normalizeState(state: GameState): GameState {
     gameConfig.cosmicEggSpawnSeconds,
   );
   const occupancy = normalizeWorldEntities(state);
-  const creatures = occupancy.creatures;
-  const legacyPortalState = normalizePortalState(state.portalState, state.discoveredCreatureIds);
+  let creatures = occupancy.creatures;
+  const hasPersistedUmbrelume = creatures.some((creature) => creature.creatureId === 'umbrelume');
+  const discoveredBeforePortalNormalization =
+    hasPersistedUmbrelume && !state.discoveredCreatureIds.includes('umbrelume')
+      ? [...state.discoveredCreatureIds, 'umbrelume' as CreatureId]
+      : state.discoveredCreatureIds;
+  const legacyPortalState = normalizePortalState(
+    state.portalState,
+    discoveredBeforePortalNormalization,
+  );
   const portalEnergyRequired = state.portalEnergyRequired ?? gameConfig.portalEnergyRequired;
   const portalEnergy = Math.min(state.portalEnergy ?? 0, portalEnergyRequired);
   const portalState =
     legacyPortalState === 'cracked' && portalEnergy >= portalEnergyRequired
       ? 'awaiting_transition'
       : legacyPortalState;
+  const shouldRemovePersistedUmbrelume =
+    hasPersistedUmbrelume && portalState !== 'dormant' && portalState !== 'rupturing';
+  const discoveredCreatureIds =
+    shouldRemovePersistedUmbrelume || portalState === 'rupturing'
+      ? discoveredBeforePortalNormalization
+      : state.discoveredCreatureIds;
+
+  if (shouldRemovePersistedUmbrelume) {
+    creatures = creatures.filter((creature) => creature.creatureId !== 'umbrelume');
+  }
+
   const currentIncomePerSecond = getTotalProductionPerSecond({ ...state, creatures, portalState });
   const secondsSinceLastSave = Math.max(0, Math.floor((Date.now() - state.lastSavedAt) / 1000));
   const eggPurchasePressure = decayEggPurchasePressure(
@@ -195,6 +215,7 @@ function normalizeState(state: GameState): GameState {
     ...state,
     creatures,
     eggs: occupancy.eggs,
+    discoveredCreatureIds,
     purchaseCounts: state.purchaseCounts ?? {},
     purchasedEggCount: state.purchasedEggCount ?? 0,
     eggPurchasePressure,
@@ -312,7 +333,7 @@ export function migrateSave(value: unknown): VersionedGameSave | null {
 
   if ('saveVersion' in value && 'state' in value) {
     const versioned = value as VersionedGameSave;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
       return null;
     }
 

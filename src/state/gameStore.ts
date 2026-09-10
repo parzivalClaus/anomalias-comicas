@@ -51,6 +51,7 @@ export type GameAction =
       environmentId: EnvironmentId;
       resultCreatureId: CreatureId;
     }
+  | { type: 'completeUmbrelumeSacrifice' }
   | {
       type: 'merge';
       sourceInstanceId: string;
@@ -756,43 +757,70 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
 
       const alreadyDiscovered = model.state.discoveredCreatureIds.includes(action.resultCreatureId);
       const shouldPulsePortal = action.environmentId === 'portal';
-      const shouldCrackPortal =
+      const shouldStartUmbrelumeRupture =
         shouldPulsePortal &&
         action.resultCreatureId === 'umbrelume' &&
-        !model.state.discoveredCreatureIds.includes('umbrelume') &&
         model.state.portalState === 'dormant';
       const stateAfterCollection = removeCreatures(model.state, [
         action.sourceInstanceId,
       ]);
+      const transformedCreature = createInstance(
+        action.resultCreatureId,
+        { x: source.x, y: source.y },
+        source.mapId,
+      );
 
       const stateWithTransform = {
         ...stateAfterCollection,
-        creatures: [
-          ...stateAfterCollection.creatures,
-          createInstance(action.resultCreatureId, { x: source.x, y: source.y }, source.mapId),
-        ],
+        creatures: [...stateAfterCollection.creatures, transformedCreature],
         discoveredCreatureIds: alreadyDiscovered
           ? model.state.discoveredCreatureIds
           : [...model.state.discoveredCreatureIds, action.resultCreatureId],
         hasSeenPortalReaction: shouldPulsePortal || model.state.hasSeenPortalReaction
           ? true
           : model.state.hasSeenPortalReaction,
-        portalState: shouldCrackPortal ? 'cracked' : model.state.portalState,
+        portalState: shouldStartUmbrelumeRupture ? 'rupturing' : model.state.portalState,
+        portalRequestState: shouldStartUmbrelumeRupture ? null : model.state.portalRequestState,
+        activePortalRequest: shouldStartUmbrelumeRupture ? null : model.state.activePortalRequest,
+        portalRequestCooldownStartedAt: shouldStartUmbrelumeRupture
+          ? null
+          : model.state.portalRequestCooldownStartedAt,
         lastSavedAt: Date.now(),
       };
-      const nextState = updateHighestIncome(
-        shouldCrackPortal ? startPortalRequest(stateWithTransform) : stateWithTransform,
-      );
+      const nextState = updateHighestIncome(stateWithTransform);
 
       return {
         ...model,
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.resultCreatureId,
-        toast: shouldCrackPortal
-          ? 'Energia Residual desbloqueada: +1/s permanente'
+        toast: shouldStartUmbrelumeRupture
+          ? 'O portal reagiu ao Umbrelume.'
           : alreadyDiscovered
             ? null
             : 'Nova anomalia descoberta!',
         portalPulseId: shouldPulsePortal ? model.portalPulseId + 1 : model.portalPulseId,
+        soundCue: createSoundCue('portalTransform'),
+        state: nextState,
+      };
+    }
+
+    case 'completeUmbrelumeSacrifice': {
+      if (model.state.portalState !== 'rupturing') return model;
+
+      const stateWithoutUmbrelume = {
+        ...model.state,
+        creatures: model.state.creatures.filter(
+          (creature) => creature.creatureId !== 'umbrelume',
+        ),
+        portalState: 'cracked' as const,
+        portalEnergy: Math.min(model.state.portalEnergy, model.state.portalEnergyRequired),
+        lastSavedAt: Date.now(),
+      };
+      const nextState = updateHighestIncome(startPortalRequest(stateWithoutUmbrelume));
+
+      return {
+        ...model,
+        toast: 'Energia Residual desbloqueada: +1/s permanente',
+        portalPulseId: model.portalPulseId + 1,
         soundCue: createSoundCue('portalTransform'),
         state: nextState,
       };
