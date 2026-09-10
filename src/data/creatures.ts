@@ -7,6 +7,7 @@ import nebulumeImage from '../assets/creatures/nebulume.png';
 import neburixImage from '../assets/creatures/neburix.png';
 import nexoryxImage from '../assets/creatures/Nexoryx.png';
 import singulumeImage from '../assets/creatures/singulume.png';
+import solarisImage from '../assets/creatures/solaris.png';
 import translumeImage from '../assets/creatures/translume.png';
 import umbrelumeImage from '../assets/creatures/umbrelume.png';
 import { ECONOMY_BALANCE } from './gameConfig';
@@ -240,6 +241,27 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     description:
       'A primeira anomalia capaz de atravessar a conexão aberta entre mundos.',
     undiscoveredHint: 'O portal estabilizado parece aguardar uma anomalia além do limite.',
+    idleAnimation: 'breathe',
+    effect: 'bubbles',
+  },
+  solaris: {
+    id: 'solaris',
+    dexNumber: 12,
+    name: 'Solaris',
+    tier: 1,
+    image: solarisImage,
+    coinsPerSecond: ECONOMY_BALANCE.productionPerSecond.solaris,
+    purchasable: false,
+    familyId: 'solar',
+    naturalTier: 1,
+    progressionType: 'natural',
+    portalEnergyValue: 4,
+    stage: 1,
+    canHatchFromCosmicEgg: false,
+    description:
+      'Uma anomalia solar nascida quando a radiação de Heliora atravessou o portal e alterou um Ovo Cósmico em Nébora.',
+    undiscoveredHint:
+      'Algumas ondas vindas de Heliora parecem alterar a origem de certos Ovos Cósmicos.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
   },

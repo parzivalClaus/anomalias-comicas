@@ -9,7 +9,8 @@ export type CreatureId =
   | 'astralume'
   | 'cosmoryx'
   | 'nexoryx'
-  | 'translume';
+  | 'translume'
+  | 'solaris';
 export type EvolutionConditionType = 'portal_influence';
 export type EnvironmentId = 'portal';
 export type ProgressionType = 'natural' | 'environmental';
@@ -127,6 +128,9 @@ export interface GameState {
   currentMapId: MapId;
   remainingEggSpawnSeconds: number;
   offlineProductionCapSeconds: number;
+  solarExposureEndsAt: number | null;
+  solarExposureNextCheckAt: number | null;
+  solarFirstDiscoveryPityAttempts: number;
 }
 
 export interface OfflineReward {
@@ -136,7 +140,7 @@ export interface OfflineReward {
 }
 
 export interface VersionedGameSave {
-  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
   state: GameState;
   updatedAt: string;
   ownerType: SaveOwnerType;

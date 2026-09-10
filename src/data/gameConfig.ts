@@ -48,6 +48,15 @@ export const ECONOMY_BALANCE = {
   },
   portalResidualIncomePerSecond: 1,
   portalSacrificeWarningPercent: 10,
+  solarExposure: {
+    durationSeconds: 30,
+    minIntervalSeconds: 180,
+    checkIntervalSeconds: 30,
+    normalEventChance: 0.08,
+    firstDiscoveryEventChance: 0.3,
+    mutationChance: 0.25,
+    firstDiscoveryPityAttempts: 4,
+  },
   portalRequests: {
     cooldownSeconds: 90,
     requestTierGap: 4,
@@ -80,6 +89,7 @@ export const ECONOMY_BALANCE = {
   productionPerSecond: {
     ...PRODUCTION_PER_SECOND,
     ...ADVANCED_PRODUCTION_PER_SECOND,
+    solaris: 2,
   },
 } as const;
 
@@ -133,6 +143,7 @@ export const gameConfig = {
   portalResidualIncomePerSecond: ECONOMY_BALANCE.portalResidualIncomePerSecond,
   portalSacrificeWarningPercent: ECONOMY_BALANCE.portalSacrificeWarningPercent,
   portalRequests: ECONOMY_BALANCE.portalRequests,
+  solarExposure: ECONOMY_BALANCE.solarExposure,
   mapConfig: MAP_CONFIG,
   criticalProductionPerSecond: ECONOMY_BALANCE.criticalProductionPerSecond,
   autosaveMs: 2500,

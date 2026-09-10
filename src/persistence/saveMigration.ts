@@ -13,7 +13,7 @@ import type {
 import { decayEggPurchasePressure, getEggPurchasePrice, getTotalProductionPerSecond } from '../utils/economy';
 import { advancePortalRequestCooldown, startPortalRequest } from '../utils/portalRequests';
 
-export const currentSaveVersion = 12;
+export const currentSaveVersion = 13;
 
 function isGameState(value: unknown): value is GameState {
   if (!value || typeof value !== 'object') return false;
@@ -64,7 +64,8 @@ function isCreatureId(value: unknown): value is CreatureId {
     value === 'astralume' ||
     value === 'cosmoryx' ||
     value === 'nexoryx' ||
-    value === 'translume'
+    value === 'translume' ||
+    value === 'solaris'
   );
 }
 
@@ -249,6 +250,14 @@ function normalizeState(state: GameState): GameState {
     remainingEggSpawnSeconds,
     offlineProductionCapSeconds:
       state.offlineProductionCapSeconds ?? gameConfig.offlineRewardCapSeconds,
+    solarExposureEndsAt:
+      typeof state.solarExposureEndsAt === 'number' ? state.solarExposureEndsAt : null,
+    solarExposureNextCheckAt:
+      typeof state.solarExposureNextCheckAt === 'number' ? state.solarExposureNextCheckAt : null,
+    solarFirstDiscoveryPityAttempts:
+      typeof state.solarFirstDiscoveryPityAttempts === 'number'
+        ? state.solarFirstDiscoveryPityAttempts
+        : 0,
   };
 
   if (baseState.portalState === 'awaiting_transition') {
@@ -303,7 +312,7 @@ export function migrateSave(value: unknown): VersionedGameSave | null {
 
   if ('saveVersion' in value && 'state' in value) {
     const versioned = value as VersionedGameSave;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(versioned.saveVersion) || !isGameState(versioned.state)) {
       return null;
     }
 

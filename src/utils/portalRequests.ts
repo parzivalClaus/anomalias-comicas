@@ -38,6 +38,7 @@ function getRequestableNaturalDefinitions(state: GameState) {
   return Object.values(creatureDefinitions)
     .filter((definition) => {
       if (definition.progressionType !== 'natural') return false;
+      if (definition.familyId !== 'nebulo') return false;
       if (definition.naturalTier === null) return false;
       if (definition.naturalTier > maxRequestableTier) return false;
 

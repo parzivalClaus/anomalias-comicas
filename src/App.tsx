@@ -108,6 +108,7 @@ function App() {
   const [isRewardedAdAvailable, setIsRewardedAdAvailable] = useState(false);
   const [isRewardedAdPending, setIsRewardedAdPending] = useState(false);
   const [rewardedAdMessage, setRewardedAdMessage] = useState<string | null>(null);
+  const [isSolarExposureInfoOpen, setIsSolarExposureInfoOpen] = useState(false);
   const [isSellMode, setIsSellMode] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
@@ -247,6 +248,12 @@ function App() {
     ? creatureDefinitions[portalRequest.creatureId]
     : null;
   const portalRequestCooldownSeconds = getPortalRequestCooldownRemainingSeconds(model.state);
+  const solarExposureRemainingSeconds = model.state.solarExposureEndsAt
+    ? Math.max(0, Math.ceil((model.state.solarExposureEndsAt - Date.now()) / 1000))
+    : 0;
+  const isSolarExposureActive = solarExposureRemainingSeconds > 0;
+  const solarMutationPercent = Math.round(gameConfig.solarExposure.mutationChance * 100);
+  const hasDiscoveredSolaris = model.state.discoveredCreatureIds.includes('solaris');
   const { user, isConfigured, isLoading: isAuthLoading } = useAuth();
   const { syncStatus, hasResolvedInitialSync } = useCloudSync({
     user,
@@ -315,6 +322,10 @@ function App() {
 
     playSoundCue(model.soundCue.type);
   }, [model.soundCue]);
+
+  useEffect(() => {
+    if (!isSolarExposureActive) setIsSolarExposureInfoOpen(false);
+  }, [isSolarExposureActive]);
 
   useEffect(() => {
     if (model.productionPulseId === lastRenderedProductionPulseRef.current) return;
@@ -1038,6 +1049,39 @@ function App() {
         <CoinHud coins={model.state.coins} productionPerSecond={productionPerSecond} />
         <AccountButton syncStatus={syncStatus} />
         {model.state.currentMapId === 'map1' ? <EggTimer remainingSeconds={eggTimerSeconds} /> : null}
+        {isSolarExposureActive ? (
+          <div
+            className={`solarExposure ${isSolarExposureInfoOpen ? 'solarExposure--open' : ''}`}
+            onMouseEnter={() => setIsSolarExposureInfoOpen(true)}
+            onMouseLeave={() => setIsSolarExposureInfoOpen(false)}
+          >
+            <button
+              className="solarExposure__button"
+              type="button"
+              aria-expanded={isSolarExposureInfoOpen}
+              aria-label="Exposição Solar"
+              onClick={() => setIsSolarExposureInfoOpen((current) => !current)}
+            >
+              <img src="/ui/sun-exposure.png" alt="" />
+              <span>
+                <strong>Exposição Solar</strong>
+                <small>{formatShortTimer(solarExposureRemainingSeconds)}</small>
+              </span>
+            </button>
+            {isSolarExposureInfoOpen ? (
+              <div className="solarExposure__popover" role="status">
+                <strong>Exposição Solar</strong>
+                <p>
+                  A radiação de Heliora está atravessando o portal. Ovos Cósmicos têm{' '}
+                  {solarMutationPercent}% de chance de{' '}
+                  {hasDiscoveredSolaris
+                    ? 'gerar Solaris.'
+                    : 'sofrer uma mutação desconhecida.'}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <button
           className="portalDropZone"
           type="button"

@@ -263,6 +263,9 @@ export function getInitialState(): GameState {
     currentMapId: 'map1',
     remainingEggSpawnSeconds: gameConfig.cosmicEggSpawnSeconds,
     offlineProductionCapSeconds: gameConfig.offlineRewardCapSeconds,
+    solarExposureEndsAt: null,
+    solarExposureNextCheckAt: null,
+    solarFirstDiscoveryPityAttempts: 0,
   };
 }
 
@@ -352,13 +355,107 @@ function updateHighestIncome(state: GameState): GameState {
   };
 }
 
+function solarExposureIsUnlocked(state: GameState) {
+  return state.portalState === 'open' && state.unlockedMapIds.includes('map2');
+}
+
+function solarExposureIsActive(state: GameState, now = Date.now()) {
+  return Boolean(state.solarExposureEndsAt && state.solarExposureEndsAt > now);
+}
+
+function scheduleNextSolarExposureCheck(state: GameState, from = Date.now()) {
+  return {
+    ...state,
+    solarExposureEndsAt: null,
+    solarExposureNextCheckAt: from + gameConfig.solarExposure.minIntervalSeconds * 1000,
+  };
+}
+
+function advanceSolarExposure(state: GameState, now = Date.now(), canStartNewExposure = true) {
+  if (!solarExposureIsUnlocked(state)) {
+    return {
+      ...state,
+      solarExposureEndsAt: null,
+      solarExposureNextCheckAt: null,
+    };
+  }
+
+  if (state.solarExposureEndsAt) {
+    if (state.solarExposureEndsAt > now) return state;
+    return scheduleNextSolarExposureCheck(state, state.solarExposureEndsAt);
+  }
+
+  const nextCheckAt =
+    state.solarExposureNextCheckAt ?? now + gameConfig.solarExposure.minIntervalSeconds * 1000;
+  if (!canStartNewExposure || now < nextCheckAt) {
+    return {
+      ...state,
+      solarExposureNextCheckAt: nextCheckAt,
+    };
+  }
+
+  const hasDiscoveredSolaris = state.discoveredCreatureIds.includes('solaris');
+  const chance = hasDiscoveredSolaris
+    ? gameConfig.solarExposure.normalEventChance
+    : gameConfig.solarExposure.firstDiscoveryEventChance;
+
+  if (Math.random() < chance) {
+    return {
+      ...state,
+      solarExposureEndsAt: now + gameConfig.solarExposure.durationSeconds * 1000,
+      solarExposureNextCheckAt: null,
+    };
+  }
+
+  return {
+    ...state,
+    solarExposureNextCheckAt: now + gameConfig.solarExposure.checkIntervalSeconds * 1000,
+  };
+}
+
+function eggCanMutateToSolaris(egg: EggState, normalCreatureId: CreatureId | null) {
+  return egg.mapId === 'map1' && normalCreatureId === 'nebulo';
+}
+
+function resolveSolarMutation(
+  egg: EggState,
+  state: GameState,
+  normalCreatureId: CreatureId | null,
+  now = Date.now(),
+) {
+  if (!eggCanMutateToSolaris(egg, normalCreatureId) || !solarExposureIsActive(state, now)) {
+    return {
+      creatureId: null,
+      pityAttempts: state.solarFirstDiscoveryPityAttempts,
+      didMutate: false,
+    };
+  }
+
+  const hasDiscoveredSolaris = state.discoveredCreatureIds.includes('solaris');
+  const nextPityAttempts = hasDiscoveredSolaris
+    ? state.solarFirstDiscoveryPityAttempts
+    : state.solarFirstDiscoveryPityAttempts + 1;
+  const forcedByPity =
+    !hasDiscoveredSolaris &&
+    nextPityAttempts >= gameConfig.solarExposure.firstDiscoveryPityAttempts;
+  const didMutate =
+    forcedByPity || Math.random() < gameConfig.solarExposure.mutationChance;
+
+  return {
+    creatureId: didMutate ? ('solaris' as CreatureId) : null,
+    pityAttempts: didMutate || hasDiscoveredSolaris ? 0 : nextPityAttempts,
+    didMutate,
+  };
+}
+
 export function applyAwayProgress(
   state: GameState,
   secondsAway: number,
   now = Date.now(),
 ): GameState {
   const elapsedSeconds = Math.max(0, Math.floor(secondsAway));
-  const stateAfterPortalCooldown = advancePortalRequestCooldown(state, now);
+  const stateAfterSolarExposure = advanceSolarExposure(state, now, false);
+  const stateAfterPortalCooldown = advancePortalRequestCooldown(stateAfterSolarExposure, now);
   const guidedTutorialIsActive = stateAfterPortalCooldown.guidedTutorialStep !== 'done';
   const shouldResolveEggCycle =
     !guidedTutorialIsActive &&
@@ -516,7 +613,11 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       const egg = model.state.eggs.find((item) => item.eggId === action.eggId);
       if (!egg) return model;
 
-      const hatchedCreatureId = egg.contentCreatureId ?? chooseHatchedCreatureId(model.state);
+      const now = Date.now();
+      const normalHatchedCreatureId = egg.contentCreatureId ?? chooseHatchedCreatureId(model.state);
+      const solarMutation = resolveSolarMutation(egg, model.state, normalHatchedCreatureId, now);
+      const hatchedCreatureId =
+        solarMutation.creatureId ?? normalHatchedCreatureId;
       if (!hatchedCreatureId) {
         return {
           ...model,
@@ -534,20 +635,27 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       return {
         ...model,
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : hatchedCreatureId,
-        toast: alreadyDiscovered ? null : 'Nova anomalia descoberta!',
+        toast: solarMutation.didMutate
+          ? alreadyDiscovered
+            ? 'O ovo sofreu uma mutação solar!'
+            : 'Mutação solar descoberta!'
+          : alreadyDiscovered
+            ? null
+            : 'Nova anomalia descoberta!',
         soundCue: createSoundCue('eggHatch'),
         state: updateHighestIncome({
           ...model.state,
           eggs: model.state.eggs.filter((item) => item.eggId !== action.eggId),
           creatures: [...model.state.creatures, hatchedCreature],
           discoveredCreatureIds,
+          solarFirstDiscoveryPityAttempts: solarMutation.pityAttempts,
           guidedTutorialStep:
             model.state.guidedTutorialStep === 'openFirstEgg'
               ? 'buyEgg'
               : model.state.guidedTutorialStep === 'openSecondEgg'
                 ? 'merge'
                 : model.state.guidedTutorialStep,
-          lastSavedAt: Date.now(),
+          lastSavedAt: now,
         }),
       };
     }
@@ -842,6 +950,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
       };
 
     case 'tick': {
+      const now = Date.now();
       const elapsedSeconds = action.elapsedSeconds;
       const productionPerSecond = getTotalProductionPerSecond(model.state);
       const eggPurchasePressure = decayEggPurchasePressure(
@@ -862,7 +971,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           : model.state.eggs;
       const spawnedEgg = nextEggs.length !== model.state.eggs.length;
       const missedEgg = shouldResolveEggCycle && !spawnedEgg;
-      const stateAfterPortalCooldown = advancePortalRequestCooldown(model.state);
+      const stateAfterPortalCooldown = advancePortalRequestCooldown(model.state, now);
       const creaturesWithProduction = stateAfterPortalCooldown.creatures.map((creature) => {
         const isMovementPaused = creature.instanceId === action.pausedCreatureInstanceId;
         const nextX = isMovementPaused ? creature.x : creature.x + creature.velocityX * elapsedSeconds;
@@ -898,7 +1007,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         toast: missedEgg
             ? 'Uma anomalia tentou se manifestar, mas não havia espaço disponível.'
             : model.toast,
-        state: updateHighestIncome({
+        state: advanceSolarExposure(updateHighestIncome({
           ...model.state,
           ...stateAfterPortalCooldown,
           coins: model.state.coins + creatureIncome + residualIncome,
@@ -909,7 +1018,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
             guidedTutorialIsActive || spawnedEgg || missedEgg
               ? gameConfig.cosmicEggSpawnSeconds
               : Math.max(0, model.state.remainingEggSpawnSeconds - elapsedSeconds),
-        }),
+        }), now, true),
       };
     }
 
