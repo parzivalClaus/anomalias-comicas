@@ -253,7 +253,9 @@ function App() {
     : 0;
   const isSolarExposureActive = solarExposureRemainingSeconds > 0;
   const isSolarRadiationUnlocked =
-    model.state.portalState === 'open' && model.state.unlockedMapIds.includes('map2');
+    model.state.currentMapId === 'map1' &&
+    model.state.portalState === 'open' &&
+    model.state.unlockedMapIds.includes('map2');
   const currentSolarMutationChance = isSolarExposureActive
     ? gameConfig.solarRadiation.exposure.mutationChance
     : gameConfig.solarRadiation.baseMutationChance;
