@@ -12,11 +12,11 @@ import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { useAuth } from './auth/AuthProvider';
 import { signInWithGoogle } from './auth/authService';
 import { creatureDefinitions, dexOrder } from './data/creatures';
-import { gameConfig } from './data/gameConfig';
+import { gameConfig, WORLD_LABELS } from './data/gameConfig';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
 import { calculateOfflineReward, reducer, type DragState } from './state/gameStore';
-import type { CreatureInstance, EggState, EnvironmentId } from './types/game';
+import type { CreatureInstance, EggState, EnvironmentId, MapId } from './types/game';
 import {
   formatCoins,
   getSellValue,
@@ -107,6 +107,9 @@ function App() {
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [pendingSale, setPendingSale] = useState<CreatureInstance | null>(null);
   const [isPortalReacting, setIsPortalReacting] = useState(false);
+  const [mapTransition, setMapTransition] = useState<{ id: number; targetMapId: MapId } | null>(
+    null,
+  );
   const [lastInteractionAt, setLastInteractionAt] = useState(Date.now());
   const [mergeTutorialPhase, setMergeTutorialPhase] = useState<'idle' | 'pulse' | 'gesture'>(
     'idle',
@@ -128,6 +131,7 @@ function App() {
   const shouldSaveOfflineCollectionRef = useRef(false);
   const hasClaimedOfflineRewardRef = useRef(false);
   const lastRenderedProductionPulseRef = useRef(model.productionPulseId);
+  const mapTransitionTimeoutsRef = useRef<number[]>([]);
 
   const productionPerSecond = getTotalProductionPerSecond(model.state);
   const visibleCreatures = model.state.creatures.filter(
@@ -353,6 +357,13 @@ function App() {
     requestPortraitOrientationLock();
   }, []);
 
+  useEffect(
+    () => () => {
+      mapTransitionTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout));
+    },
+    [],
+  );
+
   useEffect(() => {
     if (isGameplayLocked || !preloadCandidateSignature) return;
 
@@ -478,6 +489,26 @@ function App() {
     event.preventDefault();
     recordInteraction();
     openEggWithAnimation(egg.eggId);
+  }
+
+  function handlePortalMapSwitch() {
+    if (model.state.portalState !== 'open' || dragState || mapTransition) return;
+
+    const targetMapId = model.state.currentMapId === 'map1' ? 'map2' : 'map1';
+    const transitionId = Date.now();
+
+    recordInteraction();
+    setMapTransition({ id: transitionId, targetMapId });
+
+    mapTransitionTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout));
+    mapTransitionTimeoutsRef.current = [
+      window.setTimeout(() => {
+        dispatch({ type: 'switchMap', mapId: targetMapId });
+      }, 360),
+      window.setTimeout(() => {
+        setMapTransition((current) => (current?.id === transitionId ? null : current));
+      }, 920),
+    ];
   }
 
   function openEggWithAnimation(eggId: string) {
@@ -882,6 +913,7 @@ function App() {
         className={[
           'gameStage',
           `gameStage--portal-${model.state.portalState}`,
+          mapTransition ? 'gameStage--mapTransition' : '',
           isPortalReacting ? 'gameStage--portalPulse' : '',
           isEnvironmentReacting ? 'gameStage--environmentPulse' : '',
         ].join(' ')}
@@ -892,6 +924,15 @@ function App() {
         }
       >
         <div className="sceneLayer" aria-hidden="true" />
+        {mapTransition ? (
+          <div
+            key={mapTransition.id}
+            className={`mapTransitionOverlay mapTransitionOverlay--to-${mapTransition.targetMapId}`}
+            aria-hidden="true"
+          >
+            <span />
+          </div>
+        ) : null}
         <GameBoard
           creatures={visibleCreatures}
           eggs={visibleEggs}
@@ -915,11 +956,7 @@ function App() {
           type="button"
           data-environment-id="portal"
           aria-label={model.state.portalState === 'open' ? 'Trocar mapa' : 'Portal'}
-          onClick={() => {
-            if (model.state.portalState === 'open' && !dragState) {
-              dispatch({ type: 'switchMap' });
-            }
-          }}
+          onClick={handlePortalMapSwitch}
         />
         {model.state.currentMapId === 'map1' && model.state.portalState === 'dormant' ? (
           <div className="portalHint" aria-hidden="true" />
@@ -943,10 +980,9 @@ function App() {
               <span className="portalMeter__message">Portal estabilizado. Uma anomalia precisa atravessá-lo.</span>
             ) : null}
             <p>
-              {model.state.portalState === 'open' ? <span>Portal aberto</span> : null}
               <strong>
                 {model.state.portalState === 'open'
-                  ? 'Mapa 2'
+                  ? WORLD_LABELS.map2
                   : `${model.state.portalEnergy}/${model.state.portalEnergyRequired}`}
               </strong>
             </p>

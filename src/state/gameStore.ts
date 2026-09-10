@@ -1,5 +1,5 @@
 import { creatureDefinitions } from '../data/creatures';
-import { gameConfig } from '../data/gameConfig';
+import { gameConfig, WORLD_FULL_NAMES } from '../data/gameConfig';
 import { clearLocalSave } from '../persistence/localSave';
 import type {
   CreatureId,
@@ -98,6 +98,16 @@ const portalAvoidanceZone = {
   maxY: 0.2,
 };
 
+const spawnAvoidanceZones = [
+  portalAvoidanceZone,
+  {
+    minX: 0.78,
+    maxX: 1,
+    minY: 0.12,
+    maxY: 0.68,
+  },
+];
+
 function createSoundCue(type: SoundCueType) {
   soundCueCounter += 1;
   return { id: soundCueCounter, type };
@@ -110,12 +120,9 @@ function clampWorldPosition(x: number, y: number) {
   };
 }
 
-function positionIsInPortalAvoidanceZone(x: number, y: number) {
-  return (
-    x >= portalAvoidanceZone.minX &&
-    x <= portalAvoidanceZone.maxX &&
-    y >= portalAvoidanceZone.minY &&
-    y <= portalAvoidanceZone.maxY
+function positionIsInSpawnAvoidanceZone(x: number, y: number) {
+  return spawnAvoidanceZones.some(
+    (zone) => x >= zone.minX && x <= zone.maxX && y >= zone.minY && y <= zone.maxY,
   );
 }
 
@@ -147,19 +154,16 @@ function getEntityPositions(state: Pick<GameState, 'creatures' | 'eggs'>, mapId 
 
 function findWorldSpawnPosition(state: Pick<GameState, 'creatures' | 'eggs'>, mapId = 'map1') {
   const occupiedPositions = getEntityPositions(state, mapId);
-  let bestPosition = clampWorldPosition(
-    worldBounds.minX + Math.random() * (worldBounds.maxX - worldBounds.minX),
-    worldBounds.minY + Math.random() * (worldBounds.maxY - worldBounds.minY),
-  );
+  let bestPosition: { x: number; y: number } | null = null;
   let bestScore = -Infinity;
 
-  for (let attempt = 0; attempt < 28; attempt += 1) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     const candidate = clampWorldPosition(
       worldBounds.minX + Math.random() * (worldBounds.maxX - worldBounds.minX),
       worldBounds.minY + Math.random() * (worldBounds.maxY - worldBounds.minY),
     );
 
-    if (positionIsInPortalAvoidanceZone(candidate.x, candidate.y)) continue;
+    if (positionIsInSpawnAvoidanceZone(candidate.x, candidate.y)) continue;
 
     const nearestDistance = occupiedPositions.reduce(
       (nearest, position) => Math.min(nearest, distanceSquared(candidate, position)),
@@ -172,7 +176,7 @@ function findWorldSpawnPosition(state: Pick<GameState, 'creatures' | 'eggs'>, ma
     }
   }
 
-  return bestPosition;
+  return bestPosition ?? clampWorldPosition(0.5, 0.72);
 }
 
 function getCreatureVelocity(seed = Date.now()) {
@@ -715,7 +719,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         latestDiscoveryId: alreadyDiscovered ? model.latestDiscoveryId : action.resultCreatureId,
         toast: isMapOneTransitionMerge
           ? shouldOpenPortal
-            ? 'A anomalia atravessou o portal. Mapa 2 desbloqueado.'
+            ? `A anomalia atravessou o portal. ${WORLD_FULL_NAMES.map2} desbloqueado.`
             : 'A anomalia atravessou o portal.'
           : alreadyDiscovered
             ? null
@@ -900,7 +904,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
 
       return {
         ...model,
-        toast: targetMapId === 'map2' ? 'Mapa 2' : 'Mapa 1',
+        toast: WORLD_FULL_NAMES[targetMapId],
         state: {
           ...model.state,
           currentMapId: targetMapId,

@@ -4,13 +4,39 @@ const defaultEggHatchConfig: EggHatchConfig = {
   allowedStages: [1],
 };
 
+const MERGE_PRODUCTION_BONUS = 1.05;
+const nextNaturalMergeProduction = (currentProduction: number) =>
+  Math.ceil(currentProduction * 2 * MERGE_PRODUCTION_BONUS);
+
+const PRODUCTION_PER_SECOND = {
+  nebulo: 1,
+  nebulume: 3,
+  nebulux: 8,
+  neburix: 18,
+  gravulon: 40,
+  singulume: 90,
+} as const;
+
+const astralumeProduction = nextNaturalMergeProduction(PRODUCTION_PER_SECOND.singulume);
+const cosmoryxProduction = nextNaturalMergeProduction(astralumeProduction);
+const nexoryxProduction = nextNaturalMergeProduction(cosmoryxProduction);
+const translumeProduction = nextNaturalMergeProduction(nexoryxProduction);
+
+const ADVANCED_PRODUCTION_PER_SECOND = {
+  astralume: astralumeProduction,
+  cosmoryx: cosmoryxProduction,
+  nexoryx: nexoryxProduction,
+  translume: translumeProduction,
+} as const;
+
 export const ECONOMY_BALANCE = {
+  mergeProductionBonus: MERGE_PRODUCTION_BONUS,
   egg: {
     basePrice: 25,
     targetProductionSeconds: 25,
     peakProductionFloorFactor: 0.5,
     incubationSeconds: 60,
-    initialIncubationSeconds: 10,
+    initialIncubationSeconds: 8,
     freeSpawnIntervalSeconds: 10,
     purchasePriceGrowth: 1.3,
     purchasePressureIncrease: 1,
@@ -23,7 +49,7 @@ export const ECONOMY_BALANCE = {
   portalResidualIncomePerSecond: 1,
   portalSacrificeWarningPercent: 10,
   portalRequests: {
-    cooldownSeconds: 120,
+    cooldownSeconds: 90,
     requestTierGap: 4,
     tierWeightDecay: 0.6,
     maxSameTierStreak: 3,
@@ -52,16 +78,8 @@ export const ECONOMY_BALANCE = {
   },
   criticalProductionPerSecond: 10,
   productionPerSecond: {
-    nebulo: 1,
-    nebulume: 3,
-    nebulux: 8,
-    neburix: 18,
-    gravulon: 40,
-    singulume: 90,
-    astralume: 145,
-    cosmoryx: 220,
-    nexoryx: 330,
-    translume: 500,
+    ...PRODUCTION_PER_SECOND,
+    ...ADVANCED_PRODUCTION_PER_SECOND,
   },
 } as const;
 
@@ -73,6 +91,16 @@ export const MAP_CONFIG = {
   map2: {
     minNaturalTier: 11,
   },
+} as const;
+
+export const WORLD_LABELS = {
+  map1: 'Nébora',
+  map2: 'Heliora',
+} as const;
+
+export const WORLD_FULL_NAMES = {
+  map1: 'Nébora — O Mundo das Anomalias',
+  map2: 'Heliora — O Mundo Solar',
 } as const;
 
 export const gameConfig = {
