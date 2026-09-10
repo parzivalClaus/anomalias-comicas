@@ -12,10 +12,15 @@ import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { useAuth } from './auth/AuthProvider';
 import { signInWithGoogle } from './auth/authService';
 import { creatureDefinitions, dexOrder } from './data/creatures';
-import { gameConfig, WORLD_LABELS } from './data/gameConfig';
+import { gameConfig } from './data/gameConfig';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
-import { calculateOfflineReward, reducer, type DragState } from './state/gameStore';
+import {
+  applyAwayProgress,
+  calculateOfflineReward,
+  reducer,
+  type DragState,
+} from './state/gameStore';
 import type { CreatureInstance, EggState, EnvironmentId, MapId } from './types/game';
 import {
   formatCoins,
@@ -132,6 +137,15 @@ function App() {
   const hasClaimedOfflineRewardRef = useRef(false);
   const lastRenderedProductionPulseRef = useRef(model.productionPulseId);
   const mapTransitionTimeoutsRef = useRef<number[]>([]);
+  const awayStartedAtRef = useRef<number | null>(null);
+  const latestStateRef = useRef(model.state);
+  const saveOwnerRef = useRef<{ ownerType: 'guest' | 'account'; ownerUserId?: string }>({
+    ownerType: 'guest',
+  });
+  const isGameplayLockedRef = useRef(false);
+  const hasResolvedInitialSyncRef = useRef(false);
+  const offlineRewardRef = useRef(initial.offlineReward);
+  const showOfflineRewardRef = useRef(initial.showOfflineReward);
 
   const productionPerSecond = getTotalProductionPerSecond(model.state);
   const visibleCreatures = model.state.creatures.filter(
@@ -349,12 +363,93 @@ function App() {
     requestPortraitOrientationLock();
   }, []);
 
+  useEffect(() => {
+    latestStateRef.current = model.state;
+  }, [model.state]);
+
+  useEffect(() => {
+    saveOwnerRef.current = saveOwner;
+  }, [saveOwner]);
+
+  useEffect(() => {
+    isGameplayLockedRef.current = isGameplayLocked;
+    hasResolvedInitialSyncRef.current = hasResolvedInitialSync;
+    offlineRewardRef.current = initial.offlineReward;
+    showOfflineRewardRef.current = initial.showOfflineReward;
+  }, [hasResolvedInitialSync, initial.offlineReward, initial.showOfflineReward, isGameplayLocked]);
+
   useEffect(
     () => () => {
       mapTransitionTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout));
     },
     [],
   );
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      const now = Date.now();
+
+      if (document.visibilityState === 'hidden') {
+        if (awayStartedAtRef.current !== null) return;
+
+        awayStartedAtRef.current = now;
+        saveLocal({ ...latestStateRef.current, lastSavedAt: now }, saveOwnerRef.current);
+        return;
+      }
+
+      if (document.visibilityState !== 'visible') return;
+
+      const awayStartedAt = awayStartedAtRef.current;
+      if (awayStartedAt === null) return;
+
+      awayStartedAtRef.current = null;
+
+      if (
+        isGameplayLockedRef.current ||
+        !hasResolvedInitialSyncRef.current ||
+        offlineRewardRef.current
+      ) {
+        return;
+      }
+
+      const secondsAway = Math.max(0, Math.floor((now - awayStartedAt) / 1000));
+      if (secondsAway <= 0) return;
+
+      const stateBeforeAwayProgress = latestStateRef.current;
+      const reward = calculateOfflineReward(stateBeforeAwayProgress, {
+        since: awayStartedAt,
+        now,
+      });
+      const stateAfterAwayProgress = applyAwayProgress(
+        stateBeforeAwayProgress,
+        secondsAway,
+        now,
+      );
+
+      logSaveDebug('OFFLINE_REWARD_CALCULATED', {
+        source: 'memory',
+        state: stateAfterAwayProgress,
+        coins: reward?.coins ?? 0,
+        extra: {
+          trigger: 'visibilitychange',
+          secondsAway: reward?.secondsAway ?? secondsAway,
+          capReached: reward?.capReached ?? false,
+        },
+      });
+
+      latestStateRef.current = stateAfterAwayProgress;
+      saveLocal(stateAfterAwayProgress, saveOwnerRef.current);
+      dispatch({ type: 'replaceState', state: stateAfterAwayProgress });
+
+      if (reward) {
+        hasClaimedOfflineRewardRef.current = false;
+        showOfflineRewardRef.current(reward);
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   useEffect(() => {
     if (isGameplayLocked || !preloadCandidateSignature) return;

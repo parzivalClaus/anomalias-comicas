@@ -352,6 +352,39 @@ function updateHighestIncome(state: GameState): GameState {
   };
 }
 
+export function applyAwayProgress(
+  state: GameState,
+  secondsAway: number,
+  now = Date.now(),
+): GameState {
+  const elapsedSeconds = Math.max(0, Math.floor(secondsAway));
+  const stateAfterPortalCooldown = advancePortalRequestCooldown(state, now);
+  const guidedTutorialIsActive = stateAfterPortalCooldown.guidedTutorialStep !== 'done';
+  const shouldResolveEggCycle =
+    !guidedTutorialIsActive &&
+    stateAfterPortalCooldown.remainingEggSpawnSeconds <= elapsedSeconds;
+  const canSpawnEgg =
+    shouldResolveEggCycle &&
+    hasHatchCandidate(stateAfterPortalCooldown) &&
+    hasWorldCapacity(stateAfterPortalCooldown, 'map1');
+  const eggs = canSpawnEgg
+    ? [
+        ...stateAfterPortalCooldown.eggs,
+        createEgg(findWorldSpawnPosition(stateAfterPortalCooldown, 'map1'), 'free'),
+      ]
+    : stateAfterPortalCooldown.eggs;
+
+  return updateHighestIncome({
+    ...stateAfterPortalCooldown,
+    eggs,
+    remainingEggSpawnSeconds:
+      guidedTutorialIsActive || shouldResolveEggCycle
+        ? gameConfig.cosmicEggSpawnSeconds
+        : Math.max(0, stateAfterPortalCooldown.remainingEggSpawnSeconds - elapsedSeconds),
+    lastSavedAt: now,
+  });
+}
+
 function removeCreatures(state: GameState, instanceIds: string[]) {
   const instanceIdSet = new Set(instanceIds);
 
@@ -925,9 +958,13 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
   }
 }
 
-export function calculateOfflineReward(state: GameState): OfflineReward | null {
-  const now = Date.now();
-  const secondsAway = Math.max(0, Math.floor((now - state.lastSavedAt) / 1000));
+export function calculateOfflineReward(
+  state: GameState,
+  options: { since?: number; now?: number } = {},
+): OfflineReward | null {
+  const now = options.now ?? Date.now();
+  const since = options.since ?? state.lastSavedAt;
+  const secondsAway = Math.max(0, Math.floor((now - since) / 1000));
   const offlineProductionCapSeconds =
     state.offlineProductionCapSeconds ?? gameConfig.offlineRewardCapSeconds;
   const cappedSecondsAway = Math.min(secondsAway, offlineProductionCapSeconds);

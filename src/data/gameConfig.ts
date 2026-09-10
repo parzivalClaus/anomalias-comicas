@@ -44,7 +44,7 @@ export const ECONOMY_BALANCE = {
   },
   offline: {
     capSeconds: 2 * 60 * 60,
-    efficiency: 0.25,
+    efficiency: 0.1,
   },
   portalResidualIncomePerSecond: 1,
   portalSacrificeWarningPercent: 10,
