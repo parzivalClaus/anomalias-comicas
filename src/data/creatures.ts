@@ -34,7 +34,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 1,
     canHatchFromCosmicEgg: true,
     description:
-      'Uma pequena anomalia gelatinosa que parece reagir ao ambiente ao seu redor. Ninguém sabe de onde vieram os primeiros Nébulos.',
+      'Uma pequena anomalia cósmica surgida em Nébora. Seu corpo instável absorve lentamente a energia dispersa pelo ambiente.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
   },
@@ -54,7 +54,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 2,
     canHatchFromCosmicEgg: false,
     description:
-      'Quando dois Nébulos entram em ressonância, suas estruturas se fundem em uma anomalia maior. O processo libera uma quantidade incomum de energia.',
+      'Ao acumular energia suficiente, seu corpo começa a brilhar com maior intensidade e a manter uma forma mais estável.',
     undiscoveredHint: 'Ressonâncias mais intensas parecem ocorrer entre anomalias semelhantes.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -75,7 +75,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 3,
     canHatchFromCosmicEgg: false,
     description:
-      'A energia acumulada em seu núcleo já não parece inteiramente natural. Próximo a certas estruturas, o Nebulux apresenta oscilações que ainda não conseguimos explicar.',
+      'A energia concentrada em seu interior começa a escapar em pequenos fluxos luminosos. Parece especialmente sensível a distorções no espaço ao seu redor.',
     undiscoveredHint: 'Ressonâncias mais intensas parecem ocorrer entre anomalias semelhantes.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -95,7 +95,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 4,
     canHatchFromCosmicEgg: false,
     description:
-      'Uma anomalia instável criada pela interação entre um Nebulux e o portal adormecido. Sua energia foi absorvida durante a primeira ruptura do portal.',
+      'Uma anomalia instável criada pela interação entre um Nebulux e o portal adormecido. Sua energia é absorvida durante a primeira ruptura do portal.',
     undiscoveredHint:
       'A estrutura adormecida emite pulsos quando esta anomalia se aproxima.',
     idleAnimation: 'breathe',
@@ -117,7 +117,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 4,
     canHatchFromCosmicEgg: false,
     description:
-      'A cadeia natural dos Nébulos atinge uma forma mais densa, cheia de pequenos ecos gravitacionais.',
+      'Sua estrutura já não se comporta como matéria comum. Energia cósmica percorre seu corpo continuamente, alterando sua forma.',
     undiscoveredHint: 'Talvez dois Nebulux revelem uma continuidade que não depende do portal.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -138,7 +138,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 5,
     canHatchFromCosmicEgg: false,
     description:
-      'Seu corpo parece puxar poeira estelar ao redor, como se cada movimento dobrasse o espaço por um instante.',
+      'Sua presença começa a distorcer levemente o espaço ao redor. Pequenos objetos e partículas parecem atraídos por seu núcleo.',
     undiscoveredHint: 'A forma anterior ainda parece guardar massa demais para permanecer estável.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -159,7 +159,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 7,
     canHatchFromCosmicEgg: false,
     description:
-      'Uma singularidade viva em miniatura. A luz ao redor dela parece escolher caminhos mais longos.',
+      'Um núcleo extremamente denso se formou em seu interior. A energia que antes escapava agora orbita seu corpo como se estivesse presa à sua gravidade.',
     undiscoveredHint: 'Gravulons em ressonância talvez gerem algo que não deveria caber no tabuleiro.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -180,7 +180,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 8,
     canHatchFromCosmicEgg: false,
     description:
-      'Uma anomalia luminosa que parece refletir constelações que ainda não existem neste céu.',
+      'Sua estrutura se torna parcialmente astral, como se parte de seu corpo já não ocupasse completamente o mesmo espaço que Nébora.',
     undiscoveredHint: 'Singulumes em ressonância talvez revelem um brilho mais antigo.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -201,7 +201,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 9,
     canHatchFromCosmicEgg: false,
     description:
-      'Sua forma dobra pequenos fragmentos do espaço, como se guardasse um mapa inteiro dentro de si.',
+      'A energia acumulada assume proporções cósmicas. Seu núcleo comprime matéria e luz em uma forma cada vez mais difícil de conter.',
     undiscoveredHint: 'Dois Astralumes talvez consigam sustentar uma órbita impossível.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -222,7 +222,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 10,
     canHatchFromCosmicEgg: false,
     description:
-      'O teto natural do primeiro mundo. Sua energia parece pressionar a realidade em direção ao portal.',
+      'Uma anomalia no limite do que Nébora consegue sustentar. Seu núcleo parece procurar uma ligação com algo além deste mundo.',
     undiscoveredHint: 'Cosmoryx em ressonância talvez alcance o limite deste mundo.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -242,7 +242,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 11,
     canHatchFromCosmicEgg: false,
     description:
-      'A primeira anomalia capaz de atravessar a conexão aberta entre mundos.',
+      'Nascido quando dois Nexoryx ultrapassam juntos os limites de Nébora. Sua estrutura transdimensional permite que atravesse o portal e exista em Heliora.',
     undiscoveredHint: 'O portal estabilizado parece aguardar uma anomalia além do limite.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -262,7 +262,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 1,
     canHatchFromCosmicEgg: false,
     description:
-      'Uma anomalia solar nascida quando a radiação de Heliora atravessou o portal e alterou um Ovo Cósmico em Nébora.',
+      'Uma anomalia nascida quando a radiação de Heliora atravessa o portal e altera um Ovo Cósmico em Nébora.',
     undiscoveredHint:
       'Algumas ondas vindas de Heliora parecem alterar a origem de certos Ovos Cósmicos.',
     idleAnimation: 'breathe',
@@ -283,7 +283,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 2,
     canHatchFromCosmicEgg: false,
     description:
-      'A primeira evolução da linhagem Solar. Seu núcleo pulsa como uma pequena estrela aprendendo a sustentar a própria luz.',
+      'Sua energia solar começa a se estabilizar, formando um núcleo luminoso cada vez mais intenso.',
     undiscoveredHint: 'Solaris semelhantes talvez reforcem a mesma chama.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -303,7 +303,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 3,
     canHatchFromCosmicEgg: false,
     description:
-      'Uma anomalia solar mais intensa, marcada por calor vivo e por um símbolo radiante que parece responder ao céu de Heliora.',
+      'A energia acumulada irrompe em seu corpo, formando uma corona ardente ao redor de um núcleo extremamente quente.',
     undiscoveredHint: 'Solumes em ressonância talvez revelem uma forma solar mais intensa.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
@@ -323,7 +323,7 @@ export const creatureDefinitions: Record<CreatureId, CreatureDefinition> = {
     stage: 4,
     canHatchFromCosmicEgg: false,
     description:
-      'Uma forma solar estável e coroada por uma radiação clara. Sua luz se espalha em pequenos arcos ao redor do corpo.',
+      'Seu corpo assume a forma de uma pequena estrela. Uma corona estável libera continuamente a energia acumulada em seu núcleo.',
     undiscoveredHint: 'Helions em ressonância talvez sustentem uma coroa solar mais estável.',
     idleAnimation: 'breathe',
     effect: 'bubbles',
