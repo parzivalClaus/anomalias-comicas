@@ -312,17 +312,9 @@ function App() {
     );
     if (productiveCreatures.length === 0) return;
 
-    const burstCreatures = productiveCreatures
-      .map((creature) => ({
-        creature,
-        order: (creature.birthId + model.productionPulseId * 17) % 997,
-      }))
-      .sort((a, b) => a.order - b.order)
-      .slice(0, gameConfig.maxProductionBurstsPerTick)
-      .map(({ creature }) => creature);
     const timeouts: number[] = [];
 
-    for (const creature of burstCreatures) {
+    for (const creature of productiveCreatures) {
       const amount = Math.floor(creatureDefinitions[creature.creatureId].coinsPerSecond);
       const burstId = Date.now() + creature.birthId;
       const visualDelay = (creature.birthId * 37 + model.productionPulseId * 113) % 760;
@@ -961,11 +953,11 @@ function App() {
         {model.state.currentMapId === 'map1' && model.state.portalState === 'dormant' ? (
           <div className="portalHint" aria-hidden="true" />
         ) : null}
-        {model.state.currentMapId === 'map1' && model.state.portalState !== 'dormant' ? (
+        {model.state.currentMapId === 'map1' &&
+        model.state.portalState !== 'dormant' &&
+        model.state.portalState !== 'open' ? (
           <div
-            className={`portalMeter ${
-              model.state.portalState === 'open' ? 'portalMeter--active' : ''
-            }`}
+            className="portalMeter"
             aria-label="Energia do portal"
           >
             {model.state.portalState === 'cracked' ? (
@@ -981,17 +973,13 @@ function App() {
             ) : null}
             <p>
               <strong>
-                {model.state.portalState === 'open'
-                  ? WORLD_LABELS.map2
-                  : `${model.state.portalEnergy}/${model.state.portalEnergyRequired}`}
+                {model.state.portalEnergy}/{model.state.portalEnergyRequired}
               </strong>
             </p>
             <i
               style={
                 {
-                  '--portal-progress': `${
-                    model.state.portalState === 'open' ? 100 : portalProgress
-                  }%`,
+                  '--portal-progress': `${portalProgress}%`,
                 } as React.CSSProperties
               }
             />
