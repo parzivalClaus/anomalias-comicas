@@ -361,7 +361,7 @@ function solarExposureIsUnlocked(state: GameState) {
   return state.portalState === 'open' && state.unlockedMapIds.includes('map2');
 }
 
-function solarExposureIsActive(state: GameState, now = Date.now()) {
+function solarExposureIsActive(state: Pick<GameState, 'solarExposureEndsAt'>, now = Date.now()) {
   return Boolean(state.solarExposureEndsAt && state.solarExposureEndsAt > now);
 }
 
@@ -442,9 +442,7 @@ function resolveSolarMutation(
   const forcedByPity =
     !hasDiscoveredSolaris &&
     nextPityAttempts >= gameConfig.solarRadiation.firstDiscovery.pityAttempts;
-  const mutationChance = solarExposureIsActive(state, now)
-    ? gameConfig.solarRadiation.exposure.mutationChance
-    : getStableSolarMutationChance(state);
+  const mutationChance = getSolarMutationChance(state, now);
   const didMutate =
     forcedByPity || Math.random() < mutationChance;
 
@@ -462,6 +460,17 @@ export function getStableSolarMutationChance(state: Pick<GameState, 'helioxCross
       Math.max(0, state.helioxCrossings) *
         gameConfig.solarRadiation.stableMutationChancePerHelioxCrossing,
   );
+}
+
+export function getSolarMutationChance(
+  state: Pick<GameState, 'helioxCrossings' | 'solarExposureEndsAt'>,
+  now = Date.now(),
+) {
+  const stableChance = getStableSolarMutationChance(state);
+
+  return solarExposureIsActive(state, now)
+    ? stableChance + gameConfig.solarRadiation.exposure.mutationChance
+    : stableChance;
 }
 
 function isHelioxCrossingMerge(

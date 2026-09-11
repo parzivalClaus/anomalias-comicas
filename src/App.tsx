@@ -18,6 +18,7 @@ import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
 import {
   applyAwayProgress,
   calculateOfflineReward,
+  getSolarMutationChance,
   getStableSolarMutationChance,
   reducer,
   type DragState,
@@ -258,10 +259,8 @@ function App() {
     model.state.currentMapId === 'map1' &&
     model.state.portalState === 'open' &&
     model.state.unlockedMapIds.includes('map2');
-  const currentSolarMutationChance = isSolarExposureActive
-    ? gameConfig.solarRadiation.exposure.mutationChance
-    : getStableSolarMutationChance(model.state);
   const stableSolarMutationChance = getStableSolarMutationChance(model.state);
+  const currentSolarMutationChance = getSolarMutationChance(model.state);
   const solarMutationPercent = Math.round(currentSolarMutationChance * 100);
   const stableSolarMutationPercent = Math.round(stableSolarMutationChance * 100);
   const hasDiscoveredSolaris = model.state.discoveredCreatureIds.includes('solaris');
