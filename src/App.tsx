@@ -18,6 +18,7 @@ import { useAutosave, useInitialGameModel } from './hooks/useGamePersistence';
 import {
   applyAwayProgress,
   calculateOfflineReward,
+  getStableSolarMutationChance,
   reducer,
   type DragState,
 } from './state/gameStore';
@@ -259,8 +260,10 @@ function App() {
     model.state.unlockedMapIds.includes('map2');
   const currentSolarMutationChance = isSolarExposureActive
     ? gameConfig.solarRadiation.exposure.mutationChance
-    : gameConfig.solarRadiation.baseMutationChance;
+    : getStableSolarMutationChance(model.state);
+  const stableSolarMutationChance = getStableSolarMutationChance(model.state);
   const solarMutationPercent = Math.round(currentSolarMutationChance * 100);
+  const stableSolarMutationPercent = Math.round(stableSolarMutationChance * 100);
   const hasDiscoveredSolaris = model.state.discoveredCreatureIds.includes('solaris');
   const { user, isConfigured, isLoading: isAuthLoading } = useAuth();
   const { syncStatus, hasResolvedInitialSync } = useCloudSync({
@@ -666,6 +669,33 @@ function App() {
         return;
       }
 
+      if (
+        merge.resultCreatureId === 'heliox' &&
+        dragged.mapId === 'map1' &&
+        target.mapId === 'map1' &&
+        model.state.portalState !== 'open'
+      ) {
+        dispatch({
+          type: 'blockedMerge',
+          message: 'Esta anomalia não consegue atravessar o portal.',
+        });
+        return;
+      }
+
+      if (
+        (merge.resultCreatureId === 'auroryx' ||
+          merge.resultCreatureId === 'corolume' ||
+          merge.resultCreatureId === 'stellaris' ||
+          merge.resultCreatureId === 'solaryon') &&
+        (dragged.mapId !== 'map2' || target.mapId !== 'map2')
+      ) {
+        dispatch({
+          type: 'blockedMerge',
+          message: 'Esta evolução solar precisa acontecer em Heliora.',
+        });
+        return;
+      }
+
       const isDiscovery = !model.state.discoveredCreatureIds.includes(merge.resultCreatureId);
 
       if (burstPoint) {
@@ -702,7 +732,7 @@ function App() {
     recordInteraction();
     if (environmentId === 'portal' && model.state.portalState === 'open') {
       setDragState(null);
-      dispatch({ type: 'showToast', message: 'O portal já está aberto.' });
+      dispatch({ type: 'showToast', message: 'Essa anomalia não consegue atravessar o portal.' });
       return;
     }
 
@@ -1103,7 +1133,7 @@ function App() {
                 <small>
                   {isSolarExposureActive
                     ? formatShortTimer(solarExposureRemainingSeconds)
-                    : 'Estável'}
+                    : `Estável · ${stableSolarMutationPercent}%`}
                 </small>
               </span>
             </button>
@@ -1113,7 +1143,9 @@ function App() {
                 <p>
                   {isSolarExposureActive
                     ? 'A radiação de Heliora está temporariamente mais intensa.'
-                    : 'A radiação de Heliora atravessa o portal.'}{' '}
+                    : model.state.helioxCrossings > 0
+                      ? 'A passagem de criaturas solares fortaleceu a conexão com Heliora.'
+                      : 'A radiação de Heliora atravessa o portal.'}{' '}
                   Ovos Cósmicos têm{' '}
                   {solarMutationPercent}% de chance de{' '}
                   {hasDiscoveredSolaris

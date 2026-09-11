@@ -13,7 +13,13 @@ export type CreatureId =
   | 'solaris'
   | 'solume'
   | 'helion'
-  | 'coralume';
+  | 'coralume'
+  | 'solaryx'
+  | 'heliox'
+  | 'auroryx'
+  | 'corolume'
+  | 'stellaris'
+  | 'solaryon';
 export type EvolutionConditionType = 'portal_influence';
 export type EnvironmentId = 'portal';
 export type ProgressionType = 'natural' | 'environmental';
@@ -136,6 +142,7 @@ export interface GameState {
   solarExposureEndsAt: number | null;
   solarExposureNextCheckAt: number | null;
   solarFirstDiscoveryPityAttempts: number;
+  helioxCrossings: number;
 }
 
 export interface OfflineReward {
@@ -145,7 +152,24 @@ export interface OfflineReward {
 }
 
 export interface VersionedGameSave {
-  saveVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
+  saveVersion:
+    | 1
+    | 2
+    | 3
+    | 4
+    | 5
+    | 6
+    | 7
+    | 8
+    | 9
+    | 10
+    | 11
+    | 12
+    | 13
+    | 14
+    | 15
+    | 16
+    | 17;
   state: GameState;
   updatedAt: string;
   ownerType: SaveOwnerType;

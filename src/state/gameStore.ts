@@ -267,6 +267,7 @@ export function getInitialState(): GameState {
     solarExposureEndsAt: null,
     solarExposureNextCheckAt: null,
     solarFirstDiscoveryPityAttempts: 0,
+    helioxCrossings: 0,
   };
 }
 
@@ -443,7 +444,7 @@ function resolveSolarMutation(
     nextPityAttempts >= gameConfig.solarRadiation.firstDiscovery.pityAttempts;
   const mutationChance = solarExposureIsActive(state, now)
     ? gameConfig.solarRadiation.exposure.mutationChance
-    : gameConfig.solarRadiation.baseMutationChance;
+    : getStableSolarMutationChance(state);
   const didMutate =
     forcedByPity || Math.random() < mutationChance;
 
@@ -452,6 +453,33 @@ function resolveSolarMutation(
     pityAttempts: didMutate || hasDiscoveredSolaris ? 0 : nextPityAttempts,
     didMutate,
   };
+}
+
+export function getStableSolarMutationChance(state: Pick<GameState, 'helioxCrossings'>) {
+  return Math.min(
+    gameConfig.solarRadiation.stableMaxMutationChance,
+    gameConfig.solarRadiation.stableBaseMutationChance +
+      Math.max(0, state.helioxCrossings) *
+        gameConfig.solarRadiation.stableMutationChancePerHelioxCrossing,
+  );
+}
+
+function isHelioxCrossingMerge(
+  state: GameState,
+  source: CreatureInstance,
+  target: CreatureInstance,
+  resultCreatureId: CreatureId,
+) {
+  return (
+    resultCreatureId === 'heliox' &&
+    source.mapId === 'map1' &&
+    target.mapId === 'map1' &&
+    state.portalState === 'open'
+  );
+}
+
+function formatPercent(value: number) {
+  return `${Math.round(value * 100)}%`;
 }
 
 export function applyAwayProgress(
@@ -840,6 +868,25 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         source.mapId === 'map1' &&
         target.mapId === 'map1' &&
         isFinalMapOneNaturalMergeResult(action.resultCreatureId);
+      const isSolarPortalCrossingMerge = isHelioxCrossingMerge(
+        model.state,
+        source,
+        target,
+        action.resultCreatureId,
+      );
+      const isSolarMergeBlockedInNebora =
+        (action.resultCreatureId === 'heliox' &&
+          source.mapId === 'map1' &&
+          target.mapId === 'map1' &&
+          model.state.portalState !== 'open') ||
+        (action.resultCreatureId === 'auroryx' &&
+          (source.mapId !== 'map2' || target.mapId !== 'map2')) ||
+        (action.resultCreatureId === 'corolume' &&
+          (source.mapId !== 'map2' || target.mapId !== 'map2')) ||
+        (action.resultCreatureId === 'stellaris' &&
+          (source.mapId !== 'map2' || target.mapId !== 'map2')) ||
+        (action.resultCreatureId === 'solaryon' &&
+          (source.mapId !== 'map2' || target.mapId !== 'map2'));
       const canCrossPortal =
         model.state.portalState === 'awaiting_transition' || model.state.portalState === 'open';
 
@@ -852,14 +899,32 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         };
       }
 
+      if (isSolarMergeBlockedInNebora) {
+        return {
+          ...model,
+          toast:
+            action.resultCreatureId === 'heliox'
+              ? 'Esta anomalia não consegue atravessar o portal.'
+              : 'Esta evolução solar precisa acontecer em Heliora.',
+          soundCue: createSoundCue('invalid'),
+        };
+      }
+
       const nextCreature = createInstance(
         action.resultCreatureId,
         { x: action.x, y: action.y },
-        isMapOneTransitionMerge ? 'map2' : target.mapId,
+        isMapOneTransitionMerge || isSolarPortalCrossingMerge ? 'map2' : target.mapId,
       );
       const shouldPulsePortal = action.resultCreatureId === 'umbrelume';
       const shouldOpenPortal =
         isMapOneTransitionMerge && model.state.portalState === 'awaiting_transition';
+      const previousStableSolarChance = getStableSolarMutationChance(model.state);
+      const nextHelioxCrossings = isSolarPortalCrossingMerge
+        ? model.state.helioxCrossings + 1
+        : model.state.helioxCrossings;
+      const nextStableSolarChance = getStableSolarMutationChance({
+        helioxCrossings: nextHelioxCrossings,
+      });
       const stateAfterCollection = removeCreatures(model.state, [
         action.sourceInstanceId,
         action.targetInstanceId,
@@ -882,6 +947,7 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
         portalRequestCooldownStartedAt: shouldOpenPortal
           ? null
           : stateAfterCollection.portalRequestCooldownStartedAt,
+        helioxCrossings: nextHelioxCrossings,
         unlockedMapIds: shouldOpenPortal
           ? Array.from(new Set([...stateAfterCollection.unlockedMapIds, 'map2']))
           : stateAfterCollection.unlockedMapIds,
@@ -895,11 +961,15 @@ export function reducer(model: GameModel, action: GameAction): GameModel {
           ? shouldOpenPortal
             ? `A anomalia atravessou o portal. ${WORLD_FULL_NAMES.map2} desbloqueado.`
             : 'A anomalia atravessou o portal.'
+          : isSolarPortalCrossingMerge
+            ? nextStableSolarChance > previousStableSolarChance
+              ? `Conexão Solar fortalecida. Radiação Solar: ${formatPercent(previousStableSolarChance)} → ${formatPercent(nextStableSolarChance)}.`
+              : 'Heliox atravessou para Heliora.'
           : alreadyDiscovered
             ? null
             : 'Nova anomalia descoberta!',
         portalPulseId:
-          shouldPulsePortal || isMapOneTransitionMerge
+          shouldPulsePortal || isMapOneTransitionMerge || isSolarPortalCrossingMerge
             ? model.portalPulseId + 1
             : model.portalPulseId,
         soundCue: createSoundCue('merge'),

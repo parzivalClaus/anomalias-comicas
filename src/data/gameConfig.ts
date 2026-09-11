@@ -25,6 +25,12 @@ const solarisProduction = 2;
 const solumeProduction = nextNaturalMergeProduction(solarisProduction);
 const helionProduction = nextNaturalMergeProduction(solumeProduction);
 const coralumeProduction = nextNaturalMergeProduction(helionProduction);
+const solaryxProduction = nextNaturalMergeProduction(coralumeProduction);
+const helioxProduction = nextNaturalMergeProduction(solaryxProduction);
+const auroryxProduction = nextNaturalMergeProduction(helioxProduction);
+const corolumeProduction = nextNaturalMergeProduction(auroryxProduction);
+const stellarisProduction = nextNaturalMergeProduction(corolumeProduction);
+const solaryonProduction = nextNaturalMergeProduction(stellarisProduction);
 
 const ADVANCED_PRODUCTION_PER_SECOND = {
   astralume: astralumeProduction,
@@ -54,12 +60,15 @@ export const ECONOMY_BALANCE = {
   portalSacrificeWarningPercent: 10,
   solarRadiation: {
     baseMutationChance: 0.02,
+    stableBaseMutationChance: 0.02,
+    stableMutationChancePerHelioxCrossing: 0.02,
+    stableMaxMutationChance: 0.1,
     exposure: {
       mutationChance: 0.25,
       durationSeconds: 30,
       minIntervalSeconds: 180,
       checkIntervalSeconds: 30,
-      eventChance: 0.08,
+      eventChance: 0.15,
       firstDiscoveryEventChance: 0.3,
     },
     firstDiscovery: {
@@ -102,6 +111,12 @@ export const ECONOMY_BALANCE = {
     solume: solumeProduction,
     helion: helionProduction,
     coralume: coralumeProduction,
+    solaryx: solaryxProduction,
+    heliox: helioxProduction,
+    auroryx: auroryxProduction,
+    corolume: corolumeProduction,
+    stellaris: stellarisProduction,
+    solaryon: solaryonProduction,
   },
 } as const;
 

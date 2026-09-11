@@ -49,4 +49,28 @@ export const evolutionRecipes: EvolutionRecipe[] = [
     inputs: ['helion', 'helion'],
     result: 'coralume',
   },
+  {
+    inputs: ['coralume', 'coralume'],
+    result: 'solaryx',
+  },
+  {
+    inputs: ['solaryx', 'solaryx'],
+    result: 'heliox',
+  },
+  {
+    inputs: ['heliox', 'heliox'],
+    result: 'auroryx',
+  },
+  {
+    inputs: ['auroryx', 'auroryx'],
+    result: 'corolume',
+  },
+  {
+    inputs: ['corolume', 'corolume'],
+    result: 'stellaris',
+  },
+  {
+    inputs: ['stellaris', 'stellaris'],
+    result: 'solaryon',
+  },
 ];
