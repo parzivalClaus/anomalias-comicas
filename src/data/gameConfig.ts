@@ -41,7 +41,7 @@ export const ECONOMY_BALANCE = {
     peakProductionFloorFactor: 0.5,
     incubationSeconds: 60,
     initialIncubationSeconds: 8,
-    freeSpawnIntervalSeconds: 10,
+    freeSpawnIntervalSeconds: 8,
     purchasePriceGrowth: 1.3,
     purchasePressureIncrease: 1,
     purchasePressureDecaySeconds: 180,
